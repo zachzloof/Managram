@@ -7,18 +7,14 @@ const { getSetting, setSetting } = require('../database');
 const router = express.Router();
 
 const SUPPORTED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.mp4', '.mov'];
-const IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif'];
 const VIDEO_EXTENSIONS = ['.mp4', '.mov'];
 
 function isMediaFile(filename) {
-  const ext = path.extname(filename).toLowerCase();
-  return SUPPORTED_EXTENSIONS.includes(ext);
+  return SUPPORTED_EXTENSIONS.includes(path.extname(filename).toLowerCase());
 }
 
 function getMediaType(filename) {
-  const ext = path.extname(filename).toLowerCase();
-  if (VIDEO_EXTENSIONS.includes(ext)) return 'video';
-  return 'image';
+  return VIDEO_EXTENSIONS.includes(path.extname(filename).toLowerCase()) ? 'video' : 'image';
 }
 
 function formatFileSize(bytes) {
@@ -27,72 +23,85 @@ function formatFileSize(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-// GET /media/files — list all media files in content folder
+// GET /media/files?subpath= — list folders + media files at a given subpath
 router.get('/files', async (req, res) => {
   try {
-    const folderPath = getSetting('content_folder_path');
+    const rootFolder = getSetting('content_folder_path');
+    if (!rootFolder) return res.json({ folders: [], files: [], error: 'Content folder not configured' });
 
-    if (!folderPath) {
-      return res.json({ files: [], error: 'Content folder not configured' });
+    // Resolve the requested subpath safely
+    const subpath = req.query.subpath || '';
+    const targetDir = subpath
+      ? path.resolve(rootFolder, subpath)
+      : path.resolve(rootFolder);
+
+    // Prevent directory traversal
+    if (!targetDir.startsWith(path.resolve(rootFolder))) {
+      return res.status(403).json({ error: 'Access denied' });
     }
 
-    const exists = await fs.pathExists(folderPath);
-    if (!exists) {
-      return res.json({ files: [], error: `Folder not found: ${folderPath}` });
-    }
+    const exists = await fs.pathExists(targetDir);
+    if (!exists) return res.json({ folders: [], files: [], error: `Folder not found` });
 
-    const entries = await fs.readdir(folderPath, { withFileTypes: true });
+    const entries = await fs.readdir(targetDir, { withFileTypes: true });
+    const folders = [];
     const files = [];
 
     for (const entry of entries) {
-      if (!entry.isFile()) continue;
-      if (!isMediaFile(entry.name)) continue;
+      if (entry.name.startsWith('.')) continue; // skip hidden
 
-      const filePath = path.join(folderPath, entry.name);
-      const stats = await fs.stat(filePath);
-      const type = getMediaType(entry.name);
+      if (entry.isDirectory()) {
+        folders.push({
+          name: entry.name,
+          subpath: subpath ? `${subpath}/${entry.name}` : entry.name,
+        });
+      } else if (entry.isFile() && isMediaFile(entry.name)) {
+        const filePath = path.join(targetDir, entry.name);
+        const stats = await fs.stat(filePath);
+        const relPath = subpath ? `${subpath}/${entry.name}` : entry.name;
+        const type = getMediaType(entry.name);
 
-      files.push({
-        name: entry.name,
-        path: filePath,
-        type,
-        size: stats.size,
-        sizeFormatted: formatFileSize(stats.size),
-        url: `/media/file/${encodeURIComponent(entry.name)}`,
-        thumbnail: type === 'image' ? `/media/file/${encodeURIComponent(entry.name)}` : null,
-        modifiedAt: stats.mtime.toISOString(),
-      });
+        files.push({
+          name: entry.name,
+          subpath: relPath,
+          path: filePath,
+          type,
+          size: stats.size,
+          sizeFormatted: formatFileSize(stats.size),
+          url: `/media/file/${relPath.split('/').map(encodeURIComponent).join('/')}`,
+          thumbnail: type === 'image'
+            ? `/media/file/${relPath.split('/').map(encodeURIComponent).join('/')}`
+            : null,
+          modifiedAt: stats.mtime.toISOString(),
+        });
+      }
     }
 
-    // Sort by modification time, newest first
+    folders.sort((a, b) => a.name.localeCompare(b.name));
     files.sort((a, b) => new Date(b.modifiedAt) - new Date(a.modifiedAt));
 
-    res.json({ files });
+    res.json({ folders, files });
   } catch (err) {
     console.error('[Media] Error listing files:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
 
-// GET /media/file/:filename — serve the actual file
-router.get('/file/:filename', (req, res) => {
-  const folderPath = getSetting('content_folder_path');
+// GET /media/file/* — serve a file at any depth within the content folder
+router.get('/file/*', (req, res) => {
+  const rootFolder = getSetting('content_folder_path');
+  if (!rootFolder) return res.status(404).json({ error: 'Content folder not configured' });
 
-  if (!folderPath) {
-    return res.status(404).json({ error: 'Content folder not configured' });
-  }
+  // Decode each path segment individually
+  const relPath = req.params[0]
+    .split('/')
+    .map(decodeURIComponent)
+    .join(path.sep);
 
-  const filename = decodeURIComponent(req.params.filename);
+  const filePath = path.resolve(rootFolder, relPath);
 
-  // Security: prevent directory traversal
-  const safeName = path.basename(filename);
-  const filePath = path.join(folderPath, safeName);
-
-  // Check the resolved path is within the content folder
-  const resolvedPath = path.resolve(filePath);
-  const resolvedFolder = path.resolve(folderPath);
-
-  if (!resolvedPath.startsWith(resolvedFolder)) {
+  // Prevent directory traversal
+  if (!filePath.startsWith(path.resolve(rootFolder))) {
     return res.status(403).json({ error: 'Access denied' });
   }
 
@@ -100,28 +109,21 @@ router.get('/file/:filename', (req, res) => {
     return res.status(404).json({ error: 'File not found' });
   }
 
-  const mimeType = mime.lookup(filename) || 'application/octet-stream';
-
-  // Set appropriate headers for streaming video
+  const mimeType = mime.lookup(filePath) || 'application/octet-stream';
   const stats = fs.statSync(filePath);
   const fileSize = stats.size;
 
   if (mimeType.startsWith('video/') && req.headers.range) {
-    const range = req.headers.range;
-    const parts = range.replace(/bytes=/, '').split('-');
+    const parts = req.headers.range.replace(/bytes=/, '').split('-');
     const start = parseInt(parts[0], 10);
     const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
-    const chunkSize = end - start + 1;
-
     res.writeHead(206, {
       'Content-Range': `bytes ${start}-${end}/${fileSize}`,
       'Accept-Ranges': 'bytes',
-      'Content-Length': chunkSize,
+      'Content-Length': end - start + 1,
       'Content-Type': mimeType,
     });
-
-    const stream = fs.createReadStream(filePath, { start, end });
-    stream.pipe(res);
+    fs.createReadStream(filePath, { start, end }).pipe(res);
   } else {
     res.setHeader('Content-Type', mimeType);
     res.setHeader('Content-Length', fileSize);
@@ -134,21 +136,14 @@ router.get('/file/:filename', (req, res) => {
 // POST /media/folder — update content folder path
 router.post('/folder', async (req, res) => {
   const { folderPath } = req.body;
-
-  if (!folderPath) {
-    return res.status(400).json({ error: 'folderPath is required' });
-  }
+  if (!folderPath) return res.status(400).json({ error: 'folderPath is required' });
 
   try {
     const exists = await fs.pathExists(folderPath);
-    if (!exists) {
-      return res.status(400).json({ error: `Folder does not exist: ${folderPath}` });
-    }
+    if (!exists) return res.status(400).json({ error: `Folder does not exist: ${folderPath}` });
 
     const stats = await fs.stat(folderPath);
-    if (!stats.isDirectory()) {
-      return res.status(400).json({ error: `Path is not a directory: ${folderPath}` });
-    }
+    if (!stats.isDirectory()) return res.status(400).json({ error: `Path is not a directory` });
 
     setSetting('content_folder_path', folderPath);
     res.json({ success: true, folderPath });
