@@ -1,0 +1,40 @@
+{
+  "name": "managram",
+  "version": "1.0.0",
+  "description": "Instagram Content Manager",
+  "main": "electron/main.js",
+  "scripts": {
+    "dev": "concurrently -k -n \"VITE,ELECTRON\" -c \"cyan,yellow\" \"npm run dev --prefix frontend\" \"wait-on http://localhost:5173 && cross-env NODE_ENV=development electron .\"",
+    "build": "npm run build --prefix frontend && electron-builder",
+    "rebuild-native": "electron-rebuild -f -w better-sqlite3 -m ./backend",
+    "install:all": "npm install && npm install --prefix backend && npm install --prefix frontend && npm run rebuild-native"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "cross-env": "^7.0.3",
+    "electron": "^28.3.3",
+    "electron-builder": "^24.13.3",
+    "electron-rebuild": "^3.2.9",
+    "wait-on": "^7.2.0"
+  },
+  "dependencies": {
+    "@ngrok/ngrok": "^1.4.0"
+  },
+  "build": {
+    "appId": "com.managram.app",
+    "productName": "Managram",
+    "directories": { "output": "dist-electron" },
+    "files": [
+      "electron/**/*",
+      "backend/src/**/*",
+      "backend/package.json",
+      "frontend/dist/**/*",
+      "!**/.git",
+      "!**/node_modules/.cache"
+    ],
+    "extraResources": [],
+    "win": { "target": "nsis" },
+    "mac": { "target": "dmg" },
+    "linux": { "target": "AppImage" }
+  }
+}
