@@ -115,8 +115,8 @@
     </div>
 
     <!-- Loading -->
-    <div v-if="loading" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-      <div v-for="i in 12" :key="i" class="aspect-square bg-gray-900 rounded-xl animate-pulse border border-white/5" />
+    <div v-if="loading" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+      <div v-for="i in perPage" :key="i" class="aspect-square bg-gray-900 rounded-xl animate-pulse border border-white/5" />
     </div>
 
     <!-- No folder configured -->
@@ -134,23 +134,23 @@
     </div>
 
     <!-- Grid -->
-    <div v-else class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-      <!-- Folder cards -->
+    <div v-else class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+      <!-- Folder cards (always show all folders, no pagination) -->
       <button
         v-for="folder in folders"
         :key="folder.subpath"
         @click="navigateTo(folder.subpath)"
         class="group aspect-square bg-gray-900 border border-white/5 rounded-xl flex flex-col items-center justify-center gap-2 hover:border-white/20 hover:bg-gray-800 transition-all duration-200"
       >
-        <div class="w-12 h-12 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center group-hover:bg-orange-500/20 transition-colors">
-          <FolderIcon class="w-6 h-6 text-orange-400" />
+        <div class="w-14 h-14 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center group-hover:bg-orange-500/20 transition-colors">
+          <FolderIcon class="w-7 h-7 text-orange-400" />
         </div>
-        <span class="text-xs text-gray-300 text-center px-2 leading-tight line-clamp-2 group-hover:text-white transition-colors">{{ folder.name }}</span>
+        <span class="text-sm text-gray-300 text-center px-3 leading-tight line-clamp-2 group-hover:text-white transition-colors">{{ folder.name }}</span>
       </button>
 
       <!-- Media cards -->
       <MediaCard
-        v-for="file in filteredFiles"
+        v-for="file in paginatedFiles"
         :key="file.subpath"
         :file="file"
         :selected="selectedSubpaths.includes(file.subpath)"
@@ -162,6 +162,63 @@
         @delete="handleDelete"
         @sendTo="openSendTo"
       />
+    </div>
+
+    <!-- Pagination -->
+    <div v-if="!loading && filteredFiles.length > 0" class="flex items-center justify-between flex-wrap gap-4 pt-2">
+      <!-- Info + per-page -->
+      <div class="flex items-center gap-3">
+        <span class="text-gray-400 text-sm">
+          {{ pageStart }}–{{ pageEnd }} of {{ filteredFiles.length }} files
+        </span>
+        <div class="flex items-center gap-1.5">
+          <span class="text-gray-600 text-xs">Per page:</span>
+          <button
+            v-for="n in perPageOptions"
+            :key="n"
+            @click="setPerPage(n)"
+            class="px-2.5 py-1 rounded-lg text-xs font-medium transition-all"
+            :class="perPage === n
+              ? 'bg-white/15 text-white'
+              : 'text-gray-500 hover:text-white hover:bg-white/10'"
+          >
+            {{ n }}
+          </button>
+        </div>
+      </div>
+
+      <!-- Page controls -->
+      <div class="flex items-center gap-1">
+        <button
+          @click="currentPage--"
+          :disabled="currentPage === 1"
+          class="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+        >
+          <ChevronLeftIcon class="w-4 h-4" />
+        </button>
+
+        <template v-for="p in pageNumbers" :key="p">
+          <span v-if="p === '...'" class="w-8 text-center text-gray-600 text-sm">…</span>
+          <button
+            v-else
+            @click="currentPage = p"
+            class="w-8 h-8 rounded-lg text-sm font-medium transition-all"
+            :class="currentPage === p
+              ? 'bg-instagram-gradient text-white shadow-glow-pink'
+              : 'text-gray-400 hover:text-white hover:bg-white/10'"
+          >
+            {{ p }}
+          </button>
+        </template>
+
+        <button
+          @click="currentPage++"
+          :disabled="currentPage === totalPages"
+          class="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+        >
+          <ChevronRightIcon class="w-4 h-4" />
+        </button>
+      </div>
     </div>
 
     <!-- Video Preview Modal -->
@@ -402,11 +459,11 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, inject } from 'vue'
+import { ref, computed, watch, onMounted, inject } from 'vue'
 import axios from 'axios'
 import {
   ArrowPathIcon, FolderIcon, FolderOpenIcon, PhotoIcon,
-  CheckIcon, BoltIcon, VideoCameraIcon, ChevronRightIcon,
+  CheckIcon, BoltIcon, VideoCameraIcon, ChevronRightIcon, ChevronLeftIcon,
   TrashIcon, FolderArrowDownIcon, Cog6ToothIcon, XMarkIcon, PlusIcon, FolderPlusIcon,
 } from '@heroicons/vue/24/outline'
 import { CheckCircleIcon } from '@heroicons/vue/24/solid'
@@ -431,6 +488,11 @@ const folderSuccess = ref(false)
 const updatingFolder = ref(false)
 const activeFilter = ref('all')
 const selectedSubpaths = ref([])
+
+// Pagination
+const perPageOptions = [24, 48, 96]
+const perPage = ref(48)
+const currentPage = ref(1)
 
 // Presets
 const presets = ref([])
@@ -479,6 +541,35 @@ const filteredFiles = computed(() => {
   return files.value.filter(f => f.type === activeFilter.value)
 })
 
+const totalPages = computed(() => Math.max(1, Math.ceil(filteredFiles.value.length / perPage.value)))
+
+const paginatedFiles = computed(() => {
+  const start = (currentPage.value - 1) * perPage.value
+  return filteredFiles.value.slice(start, start + perPage.value)
+})
+
+const pageStart = computed(() => Math.min((currentPage.value - 1) * perPage.value + 1, filteredFiles.value.length))
+const pageEnd = computed(() => Math.min(currentPage.value * perPage.value, filteredFiles.value.length))
+
+const pageNumbers = computed(() => {
+  const total = totalPages.value
+  const cur = currentPage.value
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
+  const pages = [1]
+  if (cur > 3) pages.push('...')
+  for (let i = Math.max(2, cur - 1); i <= Math.min(total - 1, cur + 1); i++) pages.push(i)
+  if (cur < total - 2) pages.push('...')
+  pages.push(total)
+  return pages
+})
+
+watch(filteredFiles, () => { currentPage.value = 1 })
+
+function setPerPage(n) {
+  perPage.value = n
+  currentPage.value = 1
+}
+
 async function loadFiles() {
   loading.value = true
   folderError.value = ''
@@ -525,6 +616,7 @@ async function loadPresets() {
 function navigateTo(subpath) {
   currentSubpath.value = subpath
   activeFilter.value = 'all'
+  currentPage.value = 1
   loadFiles()
 }
 
