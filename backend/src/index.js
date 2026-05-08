@@ -14,6 +14,7 @@ const queueRoutes = require('./routes/queue');
 const scheduleRoutes = require('./routes/schedule');
 const captionsRoutes = require('./routes/captions');
 const settingsRoutes = require('./routes/settings');
+const presetsRoutes = require('./routes/presets');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -54,6 +55,7 @@ app.use('/queue', queueRoutes);
 app.use('/schedule', scheduleRoutes);
 app.use('/captions', captionsRoutes);
 app.use('/settings', settingsRoutes);
+app.use('/presets', presetsRoutes);
 
 // Health check
 app.get('/health', (req, res) => {

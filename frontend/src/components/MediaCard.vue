@@ -113,6 +113,13 @@
           Queue
         </button>
         <button
+          @click.stop="$emit('sendTo', file)"
+          class="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white/10 border border-white/20 text-white text-xs font-medium hover:bg-white/20 transition-colors"
+        >
+          <FolderArrowDownIcon class="w-3 h-3" />
+          Send to
+        </button>
+        <button
           @click.stop="$emit('delete', file)"
           class="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-red-500/20 border border-red-500/30 text-red-400 text-xs font-medium hover:bg-red-500/30 transition-colors"
         >
@@ -136,6 +143,7 @@ import {
   PencilIcon,
   XMarkIcon,
   TrashIcon,
+  FolderArrowDownIcon,
 } from '@heroicons/vue/24/outline';
 
 const props = defineProps({
@@ -145,7 +153,7 @@ const props = defineProps({
   showQueue: { type: Boolean, default: true },
 });
 
-const emit = defineEmits(['select', 'toggle', 'postNow', 'addToQueue', 'preview', 'renamed', 'delete']);
+const emit = defineEmits(['select', 'toggle', 'postNow', 'addToQueue', 'preview', 'renamed', 'delete', 'sendTo']);
 
 const loadError = ref(false);
 const renaming = ref(false);

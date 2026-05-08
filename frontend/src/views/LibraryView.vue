@@ -39,6 +39,18 @@
       <p class="text-gray-600 text-xs mt-2">Supported: JPG, PNG, GIF, MP4, MOV</p>
     </div>
 
+    <!-- Folder presets bar -->
+    <div class="flex items-center justify-between">
+      <div class="flex items-center gap-2 text-sm text-gray-400">
+        <FolderArrowDownIcon class="w-4 h-4" />
+        <span>{{ presets.length }} folder preset{{ presets.length !== 1 ? 's' : '' }} configured</span>
+      </div>
+      <button @click="showPresetsModal = true" class="btn-secondary text-xs py-1.5 px-3">
+        <Cog6ToothIcon class="w-3.5 h-3.5" />
+        Manage Presets
+      </button>
+    </div>
+
     <!-- Breadcrumbs -->
     <div v-if="breadcrumbs.length > 1" class="flex items-center gap-1 flex-wrap">
       <button
@@ -71,19 +83,29 @@
     </div>
 
     <!-- Bulk action bar -->
-    <div v-if="selectedSubpaths.length > 0" class="flex items-center justify-between bg-gray-900 border border-white/10 rounded-xl px-4 py-3">
+    <div v-if="selectedSubpaths.length > 0" class="flex items-center justify-between bg-gray-900 border border-white/10 rounded-xl px-4 py-3 gap-3 flex-wrap">
       <div class="flex items-center gap-4">
         <span class="text-white text-sm font-medium">{{ selectedSubpaths.length }} selected</span>
         <button @click="selectedSubpaths = []" class="text-gray-400 text-xs hover:text-white transition-colors">Deselect all</button>
         <button @click="selectAll" class="text-gray-400 text-xs hover:text-white transition-colors">Select all</button>
       </div>
-      <button
-        @click="handleBulkDelete"
-        class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/20 border border-red-500/30 text-red-400 text-sm font-medium hover:bg-red-500/30 transition-colors"
-      >
-        <TrashIcon class="w-4 h-4" />
-        Delete {{ selectedSubpaths.length }} file{{ selectedSubpaths.length > 1 ? 's' : '' }}
-      </button>
+      <div class="flex items-center gap-2">
+        <button
+          @click="openBulkSendTo"
+          :disabled="presets.length === 0"
+          class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 border border-white/20 text-white text-sm font-medium hover:bg-white/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          <FolderArrowDownIcon class="w-4 h-4" />
+          Send to
+        </button>
+        <button
+          @click="handleBulkDelete"
+          class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/20 border border-red-500/30 text-red-400 text-sm font-medium hover:bg-red-500/30 transition-colors"
+        >
+          <TrashIcon class="w-4 h-4" />
+          Delete {{ selectedSubpaths.length }} file{{ selectedSubpaths.length > 1 ? 's' : '' }}
+        </button>
+      </div>
     </div>
 
     <!-- Loading -->
@@ -107,7 +129,6 @@
 
     <!-- Grid -->
     <div v-else class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-
       <!-- Folder cards -->
       <button
         v-for="folder in folders"
@@ -133,6 +154,7 @@
         @preview="previewFile = $event"
         @renamed="handleRenamed"
         @delete="handleDelete"
+        @sendTo="openSendTo"
       />
     </div>
 
@@ -144,8 +166,130 @@
       @cropped="loadFiles"
     />
 
-    <!-- Post Now Modal -->
     <Teleport to="body">
+      <!-- ── Manage Presets Modal ── -->
+      <Transition name="modal">
+        <div
+          v-if="showPresetsModal"
+          class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+          @click.self="showPresetsModal = false"
+        >
+          <div class="bg-gray-900 border border-white/10 rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[80vh]">
+            <div class="flex items-center justify-between px-6 py-4 border-b border-white/10 shrink-0">
+              <h3 class="text-lg font-semibold text-white">Folder Presets</h3>
+              <button @click="showPresetsModal = false" class="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-gray-400 hover:text-white transition-all">
+                <XMarkIcon class="w-4 h-4" />
+              </button>
+            </div>
+
+            <!-- Preset list -->
+            <div class="flex-1 overflow-y-auto p-4 space-y-2">
+              <div v-if="presets.length === 0" class="text-center py-8 text-gray-500 text-sm">
+                No presets yet. Add one below.
+              </div>
+              <div
+                v-for="preset in presets"
+                :key="preset.id"
+                class="flex items-center gap-3 bg-white/5 border border-white/10 rounded-xl px-4 py-3"
+              >
+                <div class="w-8 h-8 rounded-lg bg-orange-500/10 border border-orange-500/20 flex items-center justify-center shrink-0">
+                  <FolderIcon class="w-4 h-4 text-orange-400" />
+                </div>
+                <div class="flex-1 min-w-0">
+                  <p class="text-white text-sm font-medium">{{ preset.name }}</p>
+                  <p class="text-gray-500 text-xs truncate">{{ preset.path }}</p>
+                </div>
+                <button
+                  @click="removePreset(preset.id)"
+                  class="shrink-0 w-7 h-7 rounded-lg bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-400 hover:bg-red-500/20 transition-colors"
+                >
+                  <TrashIcon class="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+
+            <!-- Add preset form -->
+            <div class="border-t border-white/10 p-4 space-y-3 shrink-0">
+              <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Add New Preset</p>
+              <input
+                v-model="newPresetName"
+                type="text"
+                placeholder="Nickname (e.g. Edited, Archive, Client A)"
+                class="input-field w-full"
+              />
+              <div class="flex gap-2">
+                <input
+                  v-model="newPresetPath"
+                  type="text"
+                  placeholder="Folder path"
+                  class="input-field flex-1"
+                  @keydown.enter="addPreset"
+                />
+                <button v-if="isElectron" @click="browsePresetFolder" class="btn-secondary shrink-0">Browse</button>
+              </div>
+              <button
+                @click="addPreset"
+                :disabled="!newPresetName.trim() || !newPresetPath.trim() || addingPreset"
+                class="btn-primary w-full"
+              >
+                <PlusIcon class="w-4 h-4" />
+                Add Preset
+              </button>
+              <p v-if="presetError" class="text-red-400 text-xs">{{ presetError }}</p>
+            </div>
+          </div>
+        </div>
+      </Transition>
+
+      <!-- ── Send To Modal ── -->
+      <Transition name="modal">
+        <div
+          v-if="pendingSendFiles.length > 0"
+          class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+          @click.self="pendingSendFiles = []"
+        >
+          <div class="bg-gray-900 border border-white/10 rounded-2xl w-full max-w-sm shadow-2xl">
+            <div class="flex items-center justify-between px-6 py-4 border-b border-white/10">
+              <div>
+                <h3 class="text-lg font-semibold text-white">Send to...</h3>
+                <p class="text-gray-500 text-xs mt-0.5">
+                  {{ pendingSendFiles.length }} file{{ pendingSendFiles.length > 1 ? 's' : '' }} will be copied
+                </p>
+              </div>
+              <button @click="pendingSendFiles = []" class="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-gray-400 hover:text-white transition-all">
+                <XMarkIcon class="w-4 h-4" />
+              </button>
+            </div>
+            <div class="p-4 space-y-2">
+              <div v-if="presets.length === 0" class="text-center py-6 text-gray-500 text-sm">
+                No presets configured yet.
+              </div>
+              <button
+                v-for="preset in presets"
+                :key="preset.id"
+                @click="executeSendTo(preset)"
+                :disabled="sending"
+                class="w-full flex items-center gap-3 bg-white/5 border border-white/10 rounded-xl px-4 py-3 hover:bg-white/10 hover:border-white/20 transition-all disabled:opacity-50 text-left"
+              >
+                <div class="w-9 h-9 rounded-lg bg-orange-500/10 border border-orange-500/20 flex items-center justify-center shrink-0">
+                  <FolderArrowDownIcon class="w-5 h-5 text-orange-400" />
+                </div>
+                <div class="flex-1 min-w-0">
+                  <p class="text-white text-sm font-medium">{{ preset.name }}</p>
+                  <p class="text-gray-500 text-xs truncate">{{ preset.path }}</p>
+                </div>
+                <svg v-if="sending" class="animate-spin w-4 h-4 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                </svg>
+                <ChevronRightIcon v-else class="w-4 h-4 text-gray-600 shrink-0" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+
+      <!-- ── Post Now Modal ── -->
       <Transition name="modal">
         <div
           v-if="postNowFile"
@@ -215,7 +359,8 @@ import { ref, computed, onMounted, inject } from 'vue'
 import axios from 'axios'
 import {
   ArrowPathIcon, FolderIcon, FolderOpenIcon, PhotoIcon,
-  CheckIcon, BoltIcon, VideoCameraIcon, ChevronRightIcon, TrashIcon,
+  CheckIcon, BoltIcon, VideoCameraIcon, ChevronRightIcon,
+  TrashIcon, FolderArrowDownIcon, Cog6ToothIcon, XMarkIcon, PlusIcon,
 } from '@heroicons/vue/24/outline'
 import { CheckCircleIcon } from '@heroicons/vue/24/solid'
 import MediaCard from '../components/MediaCard.vue'
@@ -238,8 +383,19 @@ const folderError = ref('')
 const folderSuccess = ref(false)
 const updatingFolder = ref(false)
 const activeFilter = ref('all')
-
 const selectedSubpaths = ref([])
+
+// Presets
+const presets = ref([])
+const showPresetsModal = ref(false)
+const newPresetName = ref('')
+const newPresetPath = ref('')
+const addingPreset = ref(false)
+const presetError = ref('')
+
+// Send to
+const pendingSendFiles = ref([])
+const sending = ref(false)
 
 const previewFile = ref(null)
 const postNowFile = ref(null)
@@ -286,6 +442,15 @@ async function loadFiles() {
   }
 }
 
+async function loadPresets() {
+  try {
+    const response = await axios.get('/presets')
+    presets.value = response.data
+  } catch (err) {
+    console.warn('Failed to load presets:', err.message)
+  }
+}
+
 function navigateTo(subpath) {
   currentSubpath.value = subpath
   activeFilter.value = 'all'
@@ -299,6 +464,12 @@ async function browseFolder() {
     folderPath.value = selected
     await updateFolder()
   }
+}
+
+async function browsePresetFolder() {
+  if (!window.electronAPI) return
+  const selected = await window.electronAPI.selectFolder()
+  if (selected) newPresetPath.value = selected
 }
 
 async function updateFolder() {
@@ -317,6 +488,58 @@ async function updateFolder() {
     folderError.value = err.response?.data?.error || err.message
   } finally {
     updatingFolder.value = false
+  }
+}
+
+async function addPreset() {
+  if (!newPresetName.value.trim() || !newPresetPath.value.trim()) return
+  addingPreset.value = true
+  presetError.value = ''
+  try {
+    const response = await axios.post('/presets', {
+      name: newPresetName.value.trim(),
+      path: newPresetPath.value.trim(),
+    })
+    presets.value.push(response.data)
+    newPresetName.value = ''
+    newPresetPath.value = ''
+  } catch (err) {
+    presetError.value = err.response?.data?.error || 'Failed to add preset'
+  } finally {
+    addingPreset.value = false
+  }
+}
+
+async function removePreset(id) {
+  try {
+    await axios.delete(`/presets/${id}`)
+    presets.value = presets.value.filter(p => p.id !== id)
+  } catch (err) {
+    showToast(err.response?.data?.error || 'Failed to remove preset', 'error')
+  }
+}
+
+function openSendTo(file) {
+  pendingSendFiles.value = [file]
+}
+
+function openBulkSendTo() {
+  pendingSendFiles.value = files.value.filter(f => selectedSubpaths.value.includes(f.subpath))
+}
+
+async function executeSendTo(preset) {
+  sending.value = true
+  const filePaths = pendingSendFiles.value.map(f => f.path)
+  const count = filePaths.length
+  try {
+    const response = await axios.post('/presets/send', { filePaths, presetId: preset.id })
+    pendingSendFiles.value = []
+    selectedSubpaths.value = []
+    showToast(`Copied ${response.data.copied} file${response.data.copied > 1 ? 's' : ''} to "${preset.name}"`, 'success')
+  } catch (err) {
+    showToast(err.response?.data?.error || 'Send failed', 'error')
+  } finally {
+    sending.value = false
   }
 }
 
@@ -427,7 +650,7 @@ async function submitPostNow() {
 onMounted(async () => {
   await settingsStore.loadSettings()
   folderPath.value = settingsStore.contentFolder
-  await loadFiles()
+  await Promise.all([loadFiles(), loadPresets()])
 })
 </script>
 
