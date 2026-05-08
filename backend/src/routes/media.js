@@ -257,6 +257,43 @@ router.patch('/rename', async (req, res) => {
   }
 });
 
+// POST /media/mkdir — create a subfolder inside the content folder
+router.post('/mkdir', async (req, res) => {
+  const { name, subpath } = req.body
+  if (!name) return res.status(400).json({ error: 'name is required' })
+
+  if (name.includes('/') || name.includes('\\') || name.includes('..')) {
+    return res.status(400).json({ error: 'Invalid folder name' })
+  }
+
+  const rootFolder = getSetting('content_folder_path')
+  if (!rootFolder) return res.status(400).json({ error: 'Content folder not configured' })
+
+  const base = subpath ? path.resolve(rootFolder, subpath) : path.resolve(rootFolder)
+
+  if (!base.startsWith(path.resolve(rootFolder))) {
+    return res.status(403).json({ error: 'Access denied' })
+  }
+
+  const newDir = path.join(base, name)
+
+  if (!newDir.startsWith(path.resolve(rootFolder))) {
+    return res.status(403).json({ error: 'Access denied' })
+  }
+
+  if (fs.pathExistsSync(newDir)) {
+    return res.status(409).json({ error: 'A folder with that name already exists' })
+  }
+
+  try {
+    await fs.mkdir(newDir)
+    res.json({ success: true, name, subpath: subpath ? `${subpath}/${name}` : name })
+  } catch (err) {
+    console.error('[Media] mkdir error:', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // POST /media/folder — update content folder path
 router.post('/folder', async (req, res) => {
   const { folderPath } = req.body;

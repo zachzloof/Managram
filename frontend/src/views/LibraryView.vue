@@ -6,10 +6,16 @@
         <h1 class="text-2xl font-bold text-white">Media Library</h1>
         <p class="text-gray-400 text-sm mt-0.5">{{ files.length }} files{{ currentSubpath ? ` in ${currentSubpath}` : '' }}</p>
       </div>
-      <button @click="loadFiles" class="btn-secondary">
-        <ArrowPathIcon class="w-4 h-4" :class="loading ? 'animate-spin' : ''" />
-        Refresh
-      </button>
+      <div class="flex gap-2">
+        <button @click="showNewFolderModal = true" class="btn-secondary">
+          <FolderPlusIcon class="w-4 h-4" />
+          New Folder
+        </button>
+        <button @click="loadFiles" class="btn-secondary">
+          <ArrowPathIcon class="w-4 h-4" :class="loading ? 'animate-spin' : ''" />
+          Refresh
+        </button>
+      </div>
     </div>
 
     <!-- Folder selector -->
@@ -167,6 +173,47 @@
     />
 
     <Teleport to="body">
+      <!-- ── New Folder Modal ── -->
+      <Transition name="modal">
+        <div
+          v-if="showNewFolderModal"
+          class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+          @click.self="showNewFolderModal = false; newFolderName = ''; newFolderError = ''"
+        >
+          <div class="bg-gray-900 border border-white/10 rounded-2xl p-6 w-full max-w-sm shadow-2xl">
+            <div class="flex items-center justify-between mb-5">
+              <h3 class="text-lg font-semibold text-white">New Folder</h3>
+              <button
+                @click="showNewFolderModal = false; newFolderName = ''; newFolderError = ''"
+                class="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-gray-400 hover:text-white transition-all"
+              >
+                <XMarkIcon class="w-4 h-4" />
+              </button>
+            </div>
+            <p v-if="currentSubpath" class="text-gray-500 text-xs mb-3">
+              Creating inside: <span class="text-gray-400 font-mono">{{ currentSubpath }}</span>
+            </p>
+            <input
+              v-model="newFolderName"
+              type="text"
+              placeholder="Folder name"
+              class="input-field w-full mb-2"
+              @keydown.enter="createFolder"
+              @keydown.escape="showNewFolderModal = false"
+              autofocus
+            />
+            <p v-if="newFolderError" class="text-red-400 text-xs mb-3">{{ newFolderError }}</p>
+            <div class="flex gap-2 mt-4">
+              <button @click="showNewFolderModal = false; newFolderName = ''; newFolderError = ''" class="btn-secondary flex-1">Cancel</button>
+              <button @click="createFolder" :disabled="!newFolderName.trim() || creatingFolder" class="btn-primary flex-1">
+                <FolderPlusIcon class="w-4 h-4" />
+                {{ creatingFolder ? 'Creating...' : 'Create' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+
       <!-- ── Manage Presets Modal ── -->
       <Transition name="modal">
         <div
@@ -360,7 +407,7 @@ import axios from 'axios'
 import {
   ArrowPathIcon, FolderIcon, FolderOpenIcon, PhotoIcon,
   CheckIcon, BoltIcon, VideoCameraIcon, ChevronRightIcon,
-  TrashIcon, FolderArrowDownIcon, Cog6ToothIcon, XMarkIcon, PlusIcon,
+  TrashIcon, FolderArrowDownIcon, Cog6ToothIcon, XMarkIcon, PlusIcon, FolderPlusIcon,
 } from '@heroicons/vue/24/outline'
 import { CheckCircleIcon } from '@heroicons/vue/24/solid'
 import MediaCard from '../components/MediaCard.vue'
@@ -396,6 +443,12 @@ const presetError = ref('')
 // Send to
 const pendingSendFiles = ref([])
 const sending = ref(false)
+
+// New folder
+const showNewFolderModal = ref(false)
+const newFolderName = ref('')
+const creatingFolder = ref(false)
+const newFolderError = ref('')
 
 const previewFile = ref(null)
 const postNowFile = ref(null)
@@ -439,6 +492,24 @@ async function loadFiles() {
     folderError.value = err.response?.data?.error || err.message
   } finally {
     loading.value = false
+  }
+}
+
+async function createFolder() {
+  const name = newFolderName.value.trim()
+  if (!name) return
+  creatingFolder.value = true
+  newFolderError.value = ''
+  try {
+    await axios.post('/media/mkdir', { name, subpath: currentSubpath.value || undefined })
+    showNewFolderModal.value = false
+    newFolderName.value = ''
+    await loadFiles()
+    showToast(`Folder "${name}" created`, 'success')
+  } catch (err) {
+    newFolderError.value = err.response?.data?.error || 'Failed to create folder'
+  } finally {
+    creatingFolder.value = false
   }
 }
 
