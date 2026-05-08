@@ -6,7 +6,7 @@ const router = express.Router();
 
 // POST /captions/generate — generate 3 caption options using OpenAI
 router.post('/generate', async (req, res) => {
-  const { mediaType, context, style } = req.body;
+  const { mediaType, context, style, hashtagCount, language } = req.body;
 
   const openaiKey = getSetting('openai_api_key');
 
@@ -21,7 +21,9 @@ router.post('/generate', async (req, res) => {
       openaiKey,
       context || '',
       style || 'casual',
-      mediaType || 'IMAGE'
+      mediaType || 'IMAGE',
+      hashtagCount ?? 10,
+      language || 'English'
     );
 
     res.json({ captions });

@@ -8,7 +8,7 @@ const OpenAI = require('openai');
  * @param {string} mediaType - IMAGE or VIDEO
  * @returns {string[]} Array of 3 caption strings
  */
-async function generateCaptions(apiKey, context = '', style = 'casual', mediaType = 'IMAGE') {
+async function generateCaptions(apiKey, context = '', style = 'casual', mediaType = 'IMAGE', hashtagCount = 10, language = 'English') {
   if (!apiKey) {
     throw new Error('OpenAI API key is not configured. Please add it in Settings.');
   }
@@ -22,21 +22,30 @@ async function generateCaptions(apiKey, context = '', style = 'casual', mediaTyp
     motivational: 'motivational, inspiring, uplifting, and energetic with empowering language',
   };
 
-  const styleGuide = styleGuides[style] || styleGuides.casual;
+  const styleGuide = styleGuides[style] || style;
   const mediaDesc = mediaType === 'VIDEO' ? 'video' : 'photo';
+
+  const hashtagLine = hashtagCount === 0
+    ? 'Do NOT include any hashtags.'
+    : `Include exactly ${hashtagCount} relevant hashtags grouped at the end.`;
+
+  const languageLine = language && language.toLowerCase() !== 'english'
+    ? `Write entirely in ${language}.`
+    : '';
 
   const prompt = `Generate exactly 3 distinct Instagram captions for a ${mediaDesc} post.
 ${context ? `Context about the post: ${context}` : ''}
 Style: ${styleGuide}
+${languageLine}
 
 Requirements for each caption:
 - Be engaging and authentic
-- Include relevant hashtags (5-10 hashtags at the end)
+- ${hashtagLine}
 - Vary the length and approach for each option
 - Make them feel natural, not spammy
 - First caption: shorter and punchy
 - Second caption: medium length with storytelling
-- Third caption: longer with call-to-action
+- Third caption: longer with a call-to-action
 
 Return ONLY a JSON array of exactly 3 strings, no other text. Example format:
 ["Caption one here #hashtag1 #hashtag2", "Caption two here #hashtag1 #hashtag2", "Caption three here #hashtag1 #hashtag2"]`;

@@ -156,7 +156,6 @@
         :selected="selectedSubpaths.includes(file.subpath)"
         @toggle="toggleSelect"
         @postNow="handlePostNow"
-        @addToQueue="handleAddToQueue"
         @preview="previewFile = $event"
         @renamed="handleRenamed"
         @delete="handleDelete"
@@ -393,88 +392,29 @@
         </div>
       </Transition>
 
-      <!-- ── Post Now Modal ── -->
-      <Transition name="modal">
-        <div
-          v-if="postNowFile"
-          class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
-          @click.self="postNowFile = null"
-        >
-          <div class="bg-gray-900 border border-white/10 rounded-2xl p-6 w-full max-w-md shadow-2xl">
-            <h3 class="text-lg font-semibold text-white mb-4">Post Now</h3>
-            <div class="flex gap-4 mb-4">
-              <img v-if="postNowFile.type === 'image'" :src="postNowFile.url" class="w-20 h-20 rounded-lg object-cover shrink-0" />
-              <div v-else class="w-20 h-20 rounded-lg bg-gray-800 flex items-center justify-center shrink-0">
-                <VideoCameraIcon class="w-8 h-8 text-gray-600" />
-              </div>
-              <div class="flex-1">
-                <p class="text-white text-sm font-medium">{{ postNowFile.name }}</p>
-                <p class="text-gray-500 text-xs mt-1">{{ postNowFile.sizeFormatted }}</p>
-              </div>
-            </div>
-
-            <div v-if="postNowFile.type === 'video'" class="flex gap-1 mb-4">
-              <button
-                v-for="pt in ['FEED', 'REELS']"
-                :key="pt"
-                @click="setPostNowType(pt)"
-                class="flex-1 py-1.5 rounded-lg text-xs font-medium transition-all duration-200"
-                :class="postNowType === pt ? 'bg-instagram-gradient text-white' : 'bg-white/5 text-gray-400 hover:text-white hover:bg-white/10'"
-              >
-                {{ pt === 'FEED' ? 'Feed Video' : 'Reels' }}
-              </button>
-            </div>
-
-            <div v-if="postNowPreflightWarnings.length > 0 && postNowPreflightErrors.length === 0" class="mb-4 border border-yellow-500/30 bg-yellow-500/10 rounded-lg p-3">
-              <p class="text-xs font-semibold text-yellow-400 mb-1">Video check</p>
-              <ul class="list-disc list-inside space-y-0.5">
-                <li v-for="w in postNowPreflightWarnings" :key="w" class="text-xs text-yellow-300">{{ w }}</li>
-              </ul>
-            </div>
-            <div v-if="postNowPreflightErrors.length > 0" class="mb-4 border border-red-500/30 bg-red-500/10 rounded-lg p-3">
-              <p class="text-xs font-semibold text-red-400 mb-1">Cannot post</p>
-              <ul class="list-disc list-inside space-y-0.5">
-                <li v-for="e in postNowPreflightErrors" :key="e" class="text-xs text-red-300">{{ e }}</li>
-              </ul>
-            </div>
-
-            <textarea v-model="postNowCaption" placeholder="Write a caption... (optional)" class="input-field resize-none mb-2" rows="4" />
-            <p class="text-gray-500 text-xs text-right mb-4">{{ postNowCaption.length }}/2200</p>
-            <div class="flex gap-2">
-              <button @click="postNowFile = null" class="btn-secondary flex-1">Cancel</button>
-              <button @click="submitPostNow" :disabled="posting || postNowPreflightErrors.length > 0" class="btn-primary flex-1">
-                <svg v-if="posting" class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
-                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-                </svg>
-                <BoltIcon v-else class="w-4 h-4" />
-                {{ posting ? 'Posting...' : 'Post Now' }}
-              </button>
-            </div>
-          </div>
-        </div>
-      </Transition>
     </Teleport>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, watch, onMounted, inject } from 'vue'
+import { useRouter } from 'vue-router'
 import axios from 'axios'
 import {
   ArrowPathIcon, FolderIcon, FolderOpenIcon, PhotoIcon,
-  CheckIcon, BoltIcon, VideoCameraIcon, ChevronRightIcon, ChevronLeftIcon,
+  CheckIcon, ChevronRightIcon, ChevronLeftIcon,
   TrashIcon, FolderArrowDownIcon, Cog6ToothIcon, XMarkIcon, PlusIcon, FolderPlusIcon,
 } from '@heroicons/vue/24/outline'
 import { CheckCircleIcon } from '@heroicons/vue/24/solid'
 import MediaCard from '../components/MediaCard.vue'
 import VideoPreviewModal from '../components/VideoPreviewModal.vue'
 import { useSettingsStore } from '../stores/settings.js'
-import { useQueueStore } from '../stores/queue.js'
+import { usePendingCompose } from '../composables/usePendingCompose.js'
 
 const showToast = inject('showToast')
+const router = useRouter()
 const settingsStore = useSettingsStore()
-const queueStore = useQueueStore()
+const { setPendingFile } = usePendingCompose()
 
 const isElectron = !!window.electronAPI
 
@@ -513,12 +453,6 @@ const creatingFolder = ref(false)
 const newFolderError = ref('')
 
 const previewFile = ref(null)
-const postNowFile = ref(null)
-const postNowCaption = ref('')
-const posting = ref(false)
-const postNowType = ref('REELS')
-const postNowPreflightErrors = ref([])
-const postNowPreflightWarnings = ref([])
 
 const breadcrumbs = computed(() => {
   const crumbs = [{ name: 'Root', subpath: '' }]
@@ -706,37 +640,9 @@ async function executeSendTo(preset) {
   }
 }
 
-async function runPostNowPreflight(file, type) {
-  postNowPreflightErrors.value = []
-  postNowPreflightWarnings.value = []
-  if (!file || file.type !== 'video') return
-  try {
-    const response = await axios.post('/posts/preflight', { mediaPath: file.subpath, postType: type })
-    postNowPreflightErrors.value = response.data.errors || []
-    postNowPreflightWarnings.value = response.data.warnings || []
-  } catch (err) {
-    console.warn('Preflight check failed:', err.message)
-  }
-}
-
-async function handlePostNow(file) {
-  postNowFile.value = file
-  postNowCaption.value = ''
-  postNowType.value = 'REELS'
-  postNowPreflightErrors.value = []
-  postNowPreflightWarnings.value = []
-  await runPostNowPreflight(file, 'REELS')
-}
-
-async function setPostNowType(type) {
-  postNowType.value = type
-  await runPostNowPreflight(postNowFile.value, type)
-}
-
-function handleAddToQueue(file) {
-  queueStore.addToQueue(file.path, '', null)
-    .then(() => showToast(`Added "${file.name}" to queue`, 'success'))
-    .catch(err => showToast(err.message, 'error'))
+function handlePostNow(file) {
+  setPendingFile(file)
+  router.push({ name: 'compose' })
 }
 
 function toggleSelect(file) {
@@ -789,26 +695,6 @@ function handleRenamed({ file, newName, newPath }) {
   showToast(`Renamed to "${newName}"`, 'success')
 }
 
-async function submitPostNow() {
-  if (!postNowFile.value) return
-  if (postNowFile.value.type === 'video') {
-    await runPostNowPreflight(postNowFile.value, postNowType.value)
-    if (postNowPreflightErrors.value.length > 0) {
-      showToast('Fix errors before posting: ' + postNowPreflightErrors.value[0], 'error')
-      return
-    }
-  }
-  posting.value = true
-  try {
-    await axios.post('/posts/publish', { mediaPath: postNowFile.value.path, caption: postNowCaption.value })
-    showToast('Post published successfully!', 'success')
-    postNowFile.value = null
-  } catch (err) {
-    showToast(err.response?.data?.error || 'Failed to publish post', 'error')
-  } finally {
-    posting.value = false
-  }
-}
 
 onMounted(async () => {
   await settingsStore.loadSettings()

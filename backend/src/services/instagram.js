@@ -2,18 +2,26 @@ const axios = require('axios');
 
 const GRAPH_BASE = 'https://graph.instagram.com/v21.0';
 
-async function createMediaContainer(userId, accessToken, mediaUrl, mediaType, caption) {
+async function createMediaContainer(userId, accessToken, mediaUrl, mediaType, caption, meta = {}) {
   const params = {
     access_token: accessToken,
     caption: caption || '',
   };
 
+  if (meta.likeCountHidden)    params.like_and_view_counts_hidden = true;
+  if (meta.commentsDisabled)   params.comment_enabled = false;
+  if (meta.altText)            params.alt_text = meta.altText;
+  if (meta.locationId)         params.location_id = meta.locationId;
+
   if (mediaType === 'VIDEO' || mediaType === 'REELS') {
     params.media_type = 'REELS';
     params.video_url = mediaUrl;
-    params.share_to_feed = true;
+    params.share_to_feed = meta.shareToFeed !== false;
   } else {
     params.image_url = mediaUrl;
+    if (meta.userTags && meta.userTags.length > 0) {
+      params.user_tags = JSON.stringify(meta.userTags);
+    }
   }
 
   const response = await axios.post(`${GRAPH_BASE}/${userId}/media`, null, { params });

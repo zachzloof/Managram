@@ -23,7 +23,41 @@ function formatFileSize(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-// GET /media/files?subpath= — list folders + media files at a given subpath
+async function buildFileEntry(rootFolder, filePath, relPath) {
+  const stats = await fs.stat(filePath);
+  const type = getMediaType(filePath);
+  const encoded = relPath.split('/').map(encodeURIComponent).join('/');
+  return {
+    name: path.basename(filePath),
+    subpath: relPath,
+    path: filePath,
+    type,
+    size: stats.size,
+    sizeFormatted: formatFileSize(stats.size),
+    url: `/media/file/${encoded}`,
+    thumbnail: type === 'image' ? `/media/file/${encoded}` : null,
+    modifiedAt: stats.mtime.toISOString(),
+  };
+}
+
+async function collectRecursive(rootFolder, dir, relBase) {
+  const entries = await fs.readdir(dir, { withFileTypes: true });
+  const files = [];
+  for (const entry of entries) {
+    if (entry.name.startsWith('.')) continue;
+    const entryPath = path.join(dir, entry.name);
+    const relPath = relBase ? `${relBase}/${entry.name}` : entry.name;
+    if (entry.isDirectory()) {
+      const sub = await collectRecursive(rootFolder, entryPath, relPath);
+      files.push(...sub);
+    } else if (entry.isFile() && isMediaFile(entry.name)) {
+      files.push(await buildFileEntry(rootFolder, entryPath, relPath));
+    }
+  }
+  return files;
+}
+
+// GET /media/files?subpath=&recursive=true — list folders + media files at a given subpath
 router.get('/files', async (req, res) => {
   try {
     const rootFolder = getSetting('content_folder_path');
@@ -43,12 +77,19 @@ router.get('/files', async (req, res) => {
     const exists = await fs.pathExists(targetDir);
     if (!exists) return res.json({ folders: [], files: [], error: `Folder not found` });
 
+    // Recursive mode: flatten all files in all subdirectories
+    if (req.query.recursive === 'true') {
+      const files = await collectRecursive(rootFolder, targetDir, subpath);
+      files.sort((a, b) => new Date(b.modifiedAt) - new Date(a.modifiedAt));
+      return res.json({ folders: [], files });
+    }
+
     const entries = await fs.readdir(targetDir, { withFileTypes: true });
     const folders = [];
     const files = [];
 
     for (const entry of entries) {
-      if (entry.name.startsWith('.')) continue; // skip hidden
+      if (entry.name.startsWith('.')) continue;
 
       if (entry.isDirectory()) {
         folders.push({
@@ -56,24 +97,8 @@ router.get('/files', async (req, res) => {
           subpath: subpath ? `${subpath}/${entry.name}` : entry.name,
         });
       } else if (entry.isFile() && isMediaFile(entry.name)) {
-        const filePath = path.join(targetDir, entry.name);
-        const stats = await fs.stat(filePath);
         const relPath = subpath ? `${subpath}/${entry.name}` : entry.name;
-        const type = getMediaType(entry.name);
-
-        files.push({
-          name: entry.name,
-          subpath: relPath,
-          path: filePath,
-          type,
-          size: stats.size,
-          sizeFormatted: formatFileSize(stats.size),
-          url: `/media/file/${relPath.split('/').map(encodeURIComponent).join('/')}`,
-          thumbnail: type === 'image'
-            ? `/media/file/${relPath.split('/').map(encodeURIComponent).join('/')}`
-            : null,
-          modifiedAt: stats.mtime.toISOString(),
-        });
+        files.push(await buildFileEntry(rootFolder, path.join(targetDir, entry.name), relPath));
       }
     }
 

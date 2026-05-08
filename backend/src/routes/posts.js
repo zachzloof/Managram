@@ -85,7 +85,7 @@ function getMediaType(filePath) {
 
 // POST /posts/publish — immediately publish a post
 router.post('/publish', async (req, res) => {
-  const { mediaPath, caption } = req.body;
+  const { mediaPath, caption, metadata = {} } = req.body;
 
   if (!mediaPath) {
     return res.status(400).json({ error: 'mediaPath is required' });
@@ -118,7 +118,8 @@ router.post('/publish', async (req, res) => {
       accessToken,
       fileUrl,
       mediaType,
-      caption || ''
+      caption || '',
+      metadata
     );
 
     // Wait for video processing

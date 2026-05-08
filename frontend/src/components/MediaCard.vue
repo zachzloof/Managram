@@ -105,14 +105,6 @@
           Post
         </button>
         <button
-          v-if="showQueue"
-          @click.stop="$emit('addToQueue', file)"
-          class="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white/10 border border-white/20 text-white text-xs font-medium hover:bg-white/20 transition-colors"
-        >
-          <QueueListIcon class="w-3 h-3" />
-          Queue
-        </button>
-        <button
           @click.stop="$emit('sendTo', file)"
           class="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white/10 border border-white/20 text-white text-xs font-medium hover:bg-white/20 transition-colors"
         >
@@ -138,7 +130,6 @@ import {
   PhotoIcon,
   PlayIcon,
   BoltIcon,
-  QueueListIcon,
   CheckIcon,
   PencilIcon,
   XMarkIcon,
@@ -150,10 +141,9 @@ const props = defineProps({
   file: { type: Object, required: true },
   selected: { type: Boolean, default: false },
   showPostNow: { type: Boolean, default: true },
-  showQueue: { type: Boolean, default: true },
 });
 
-const emit = defineEmits(['select', 'toggle', 'postNow', 'addToQueue', 'preview', 'renamed', 'delete', 'sendTo']);
+const emit = defineEmits(['select', 'toggle', 'postNow', 'preview', 'renamed', 'delete', 'sendTo']);
 
 const loadError = ref(false);
 const renaming = ref(false);
