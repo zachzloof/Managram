@@ -80,7 +80,6 @@ import { RouterLink, useRoute, useRouter } from 'vue-router';
 import {
   HomeIcon,
   PhotoIcon,
-  PencilSquareIcon,
   QueueListIcon,
   CalendarDaysIcon,
   CogIcon,
@@ -108,7 +107,6 @@ function isActive(path) {
 const navItems = computed(() => [
   { to: '/', label: 'Dashboard', icon: HomeIcon },
   { to: '/library', label: 'Library', icon: PhotoIcon },
-  { to: '/compose', label: 'Compose', icon: PencilSquareIcon },
   {
     to: '/queue',
     label: 'Queue',
