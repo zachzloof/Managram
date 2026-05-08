@@ -1,6 +1,6 @@
 <template>
-  <!-- Single root — Vue's <Transition mode="out-in"> requires exactly one root element -->
-  <div class="h-full flex flex-col overflow-hidden">
+  <!-- Single root — no overflow-hidden here; it breaks transitionend in Chromium/Electron -->
+  <div class="h-full flex flex-col">
 
     <!-- Loading/redirect state: selectedFile is null until onMounted fires -->
     <div v-if="!selectedFile" class="flex-1 flex items-center justify-center">
@@ -31,7 +31,7 @@
     </div>
 
     <!-- Main: left = media, right = details -->
-    <div class="flex-1 min-h-0 flex">
+    <div class="flex-1 min-h-0 flex overflow-hidden">
 
       <!-- LEFT: preview / crop -->
       <div class="w-1/2 shrink-0 border-r border-white/5 flex flex-col bg-gray-950/40">
