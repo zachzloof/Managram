@@ -83,6 +83,7 @@ function getMediaType(filePath) {
   return 'IMAGE';
 }
 
+
 // POST /posts/publish — immediately publish a post
 router.post('/publish', async (req, res) => {
   const { mediaPath, caption, metadata = {} } = req.body;
@@ -105,43 +106,33 @@ router.post('/publish', async (req, res) => {
       .json({ error: 'Public URL (ngrok) not configured. Please add it in Settings.' });
   }
 
-  try {
-    const filename = path.basename(mediaPath);
-    const mediaType = getMediaType(mediaPath);
-    const fileUrl = `${publicUrl.replace(/\/$/, '')}/media/file/${encodeURIComponent(filename)}`;
+  const contentFolder = getSetting('content_folder_path');
+  if (!contentFolder) return res.status(400).json({ error: 'Content folder not configured' });
 
+  let fileUrl = '';
+
+  try {
+    const mediaType = getMediaType(mediaPath);
+    const relPath = path.relative(contentFolder, mediaPath).replace(/\\/g, '/');
+    fileUrl = `${publicUrl.replace(/\/$/, '')}/media/file/${relPath.split('/').map(encodeURIComponent).join('/')}`;
     console.log(`[Posts] Publishing ${mediaType} to Instagram: ${fileUrl}`);
 
-    // Create the media container
     const containerId = await instagramService.createMediaContainer(
-      userId,
-      accessToken,
-      fileUrl,
-      mediaType,
-      caption || '',
-      metadata
+      userId, accessToken, fileUrl, mediaType, caption || '', metadata
     );
 
-    // Wait for video processing
     if (mediaType === 'VIDEO') {
       console.log('[Posts] Waiting for video container to process...');
       await instagramService.waitForContainerReady(containerId, accessToken);
     }
 
-    // Publish the container
     const postId = await instagramService.publishMedia(userId, accessToken, containerId);
-
     console.log(`[Posts] Successfully published post ID: ${postId}`);
-
-    res.json({
-      success: true,
-      postId,
-      message: 'Post published successfully',
-    });
+    res.json({ success: true, postId, message: 'Post published successfully' });
   } catch (err) {
-    console.error('[Posts] Publish error:', err.response?.data || err.message);
-    const errorMsg = err.response?.data?.error?.message || err.message || 'Failed to publish post';
-    res.status(500).json({ error: errorMsg });
+    const igError = err.response?.data?.error;
+    console.error('[Posts] Publish error:', igError || err.message);
+    res.status(500).json({ error: igError?.message || err.message || 'Failed to publish post', fileUrl });
   }
 });
 

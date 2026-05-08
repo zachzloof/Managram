@@ -29,11 +29,17 @@
             'badge-posted': item.status === 'posted',
             'badge-failed': item.status === 'failed',
             'badge-posting': item.status === 'posting',
+            'bg-blue-500/20 text-blue-400 border border-blue-500/30 badge': item.status === 'scheduled',
           }"
         >
           {{ item.status }}
         </span>
       </div>
+
+      <!-- Error message (failed items) -->
+      <p v-if="item.status === 'failed' && item.error_message" class="text-red-400 text-xs mb-1.5 line-clamp-2">
+        {{ item.error_message }}
+      </p>
 
       <!-- Caption preview -->
       <p v-if="item.caption" class="text-gray-400 text-sm line-clamp-2 mb-1.5">{{ item.caption }}</p>
@@ -59,7 +65,7 @@
     <!-- Actions -->
     <div class="flex items-center gap-1 shrink-0">
       <button
-        v-if="item.status === 'pending'"
+        v-if="item.status === 'pending' || item.status === 'failed'"
         @click="$emit('postNow', item)"
         class="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-white hover:bg-instagram-gradient transition-all duration-200"
         title="Post Now"
@@ -67,7 +73,7 @@
         <BoltIcon class="w-4 h-4" />
       </button>
       <button
-        v-if="item.status === 'pending' || item.status === 'failed'"
+        v-if="item.status === 'pending'"
         @click="$emit('edit', item)"
         class="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-all duration-200"
         title="Edit"
@@ -121,17 +127,21 @@ function getFilename(filePath) {
 function formatDate(dateStr) {
   if (!dateStr) return '';
   try {
-    const date = new Date(dateStr);
+    const date = new Date(dateStr.includes('T') ? dateStr : dateStr.replace(' ', 'T') + 'Z');
     const now = new Date();
     const diff = now - date;
 
-    // Less than 1 minute
+    if (diff < 0) {
+      const abs = -diff;
+      if (abs < 60000) return 'in less than a minute';
+      if (abs < 3600000) return `in ${Math.floor(abs / 60000)}m`;
+      if (abs < 86400000) return `in ${Math.floor(abs / 3600000)}h`;
+      return `in ${Math.floor(abs / 86400000)}d`;
+    }
+
     if (diff < 60000) return 'just now';
-    // Less than 1 hour
     if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
-    // Less than 24 hours
     if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
-    // Less than 7 days
     if (diff < 604800000) return `${Math.floor(diff / 86400000)}d ago`;
 
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });

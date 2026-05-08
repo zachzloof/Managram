@@ -44,9 +44,13 @@ async function postMedia(db, mediaPath, caption) {
     throw new Error('Public URL (ngrok) not configured');
   }
 
-  const filename = path.basename(mediaPath);
+  const contentFolder = getSetting('content_folder_path');
+  if (!contentFolder) throw new Error('Content folder not configured');
+
   const mediaType = getMediaType(mediaPath);
-  const fileUrl = `${publicUrl.replace(/\/$/, '')}/media/file/${encodeURIComponent(filename)}`;
+  const relPath = path.relative(contentFolder, mediaPath).replace(/\\/g, '/');
+  const encodedPath = relPath.split('/').map(encodeURIComponent).join('/');
+  const fileUrl = `${publicUrl.replace(/\/$/, '')}/media/file/${encodedPath}`;
 
   const containerId = await instagramService.createMediaContainer(
     userId,
@@ -66,15 +70,58 @@ async function postMedia(db, mediaPath, caption) {
 }
 
 function getCurrentDayAbbr() {
-  const days = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
-  return days[new Date().getDay()];
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/London',
+    weekday: 'short',
+  }).format(new Date()).toLowerCase().slice(0, 3);
 }
 
 function getCurrentTime() {
-  const now = new Date();
-  const hours = String(now.getHours()).padStart(2, '0');
-  const minutes = String(now.getMinutes()).padStart(2, '0');
-  return `${hours}:${minutes}`;
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/London',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(new Date());
+  const hour = parts.find(p => p.type === 'hour')?.value ?? '00';
+  const minute = parts.find(p => p.type === 'minute')?.value ?? '00';
+  return `${hour}:${minute}`;
+}
+
+function getCurrentUKDatetime() {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/London',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hour12: false,
+  }).formatToParts(new Date());
+  const get = (t) => parts.find(p => p.type === t)?.value ?? '00';
+  return `${get('year')}-${get('month')}-${get('day')}T${get('hour')}:${get('minute')}`;
+}
+
+async function checkScheduledQueueItems(db) {
+  const ukNow = getCurrentUKDatetime();
+
+  // Only match items explicitly scheduled by the user (YYYY-MM-DDTHH:MM, no Z suffix)
+  const due = db.prepare(
+    `SELECT * FROM queue WHERE status = 'pending'
+     AND scheduled_at IS NOT NULL AND scheduled_at != ''
+     AND scheduled_at NOT LIKE '%Z'
+     AND scheduled_at <= ?`
+  ).all(ukNow);
+
+  for (const item of due) {
+    console.log(`[Scheduler] Auto-posting scheduled item ${item.id} (due ${item.scheduled_at})`);
+    db.prepare("UPDATE queue SET status = 'posting', error_message = NULL WHERE id = ?").run(item.id);
+    try {
+      const postId = await postMedia(db, item.media_path, item.caption || '');
+      db.prepare("UPDATE queue SET status = 'posted', posted_at = datetime('now') WHERE id = ?").run(item.id);
+      console.log(`[Scheduler] Posted scheduled item ${item.id}, Instagram post ID: ${postId}`);
+    } catch (err) {
+      console.error(`[Scheduler] Error posting scheduled item ${item.id}:`, err.message);
+      db.prepare("UPDATE queue SET status = 'failed', error_message = ? WHERE id = ?")
+        .run(err.message, item.id);
+    }
+  }
 }
 
 async function checkAndFireSchedules(db) {
@@ -174,12 +221,12 @@ async function checkAndFireSchedules(db) {
     } catch (err) {
       console.error(`[Scheduler] Error posting for schedule ${schedule.name}:`, err.message);
 
-      // If there was a queue item being posted, revert it to failed
       const failedItem = db
         .prepare("SELECT id FROM queue WHERE status = 'posting' LIMIT 1")
         .get();
       if (failedItem) {
-        db.prepare("UPDATE queue SET status = 'failed' WHERE id = ?").run(failedItem.id);
+        db.prepare("UPDATE queue SET status = 'failed', error_message = ? WHERE id = ?")
+          .run(err.message, failedItem.id);
       }
     }
   }
@@ -188,9 +235,15 @@ async function checkAndFireSchedules(db) {
 function startScheduler(db) {
   console.log('[Scheduler] Starting cron scheduler (checks every minute)');
 
-  // Run every minute
+  // Reset any items stuck in 'posting' from a previous crashed run
+  const stuck = db.prepare("UPDATE queue SET status = 'failed', error_message = 'Server restarted during post' WHERE status = 'posting'").run();
+  if (stuck.changes > 0) {
+    console.log(`[Scheduler] Reset ${stuck.changes} stuck 'posting' item(s) to 'failed'`);
+  }
+
   cron.schedule('* * * * *', async () => {
     try {
+      await checkScheduledQueueItems(db);
       await checkAndFireSchedules(db);
     } catch (err) {
       console.error('[Scheduler] Unexpected error:', err.message);

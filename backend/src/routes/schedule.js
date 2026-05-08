@@ -4,23 +4,49 @@ const { getDb } = require('../database');
 
 const router = express.Router();
 
+function getUKOffsetMs() {
+  const now = new Date();
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/London',
+    hour: 'numeric',
+    minute: 'numeric',
+    second: 'numeric',
+    hour12: false,
+  }).formatToParts(now);
+  const toNum = (type) => parseInt(parts.find(p => p.type === type)?.value ?? '0');
+  const ukMs = (toNum('hour') * 3600 + toNum('minute') * 60 + toNum('second')) * 1000;
+  const utcMs = (now.getUTCHours() * 3600 + now.getUTCMinutes() * 60 + now.getUTCSeconds()) * 1000;
+  let diff = ukMs - utcMs;
+  if (diff > 43200000) diff -= 86400000;
+  if (diff < -43200000) diff += 86400000;
+  return diff;
+}
+
 function getNextFireTime(time, days) {
   if (!time || !days || days.length === 0) return null;
 
-  const dayMap = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
-  const now = new Date();
   const [hours, minutes] = time.split(':').map(Number);
+  const offsetMs = getUKOffsetMs();
+  // Express current moment in London clock time via UTC arithmetic
+  const ukNow = new Date(Date.now() + offsetMs);
 
   for (let i = 0; i <= 7; i++) {
-    const candidate = new Date(now);
-    candidate.setDate(now.getDate() + i);
-    candidate.setHours(hours, minutes, 0, 0);
+    // Build a "London clock time" candidate as a UTC-like Date
+    const candidate = new Date(Date.UTC(
+      ukNow.getUTCFullYear(),
+      ukNow.getUTCMonth(),
+      ukNow.getUTCDate() + i,
+      hours,
+      minutes,
+      0
+    ));
+    // Convert back to real UTC
+    const candidateUTC = new Date(candidate.getTime() - offsetMs);
+    if (candidateUTC.getTime() <= Date.now()) continue;
 
-    if (candidate <= now) continue;
-
-    const dayAbbr = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'][candidate.getDay()];
+    const dayAbbr = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'][candidate.getUTCDay()];
     if (days.includes(dayAbbr)) {
-      return candidate.toISOString();
+      return candidateUTC.toISOString();
     }
   }
 

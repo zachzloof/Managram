@@ -155,6 +155,7 @@
 
 <script setup>
 import { ref, computed, onMounted, inject } from 'vue';
+import { toUKDatetimeLocal } from '../utils/time.js';
 import { RouterLink } from 'vue-router';
 import axios from 'axios';
 import {
@@ -194,7 +195,7 @@ function handleEdit(item) {
   editingItem.value = item;
   editCaption.value = item.caption || '';
   editScheduledAt.value = item.scheduled_at
-    ? new Date(item.scheduled_at).toISOString().slice(0, 16)
+    ? toUKDatetimeLocal(new Date(item.scheduled_at))
     : '';
 }
 

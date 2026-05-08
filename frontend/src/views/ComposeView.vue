@@ -517,11 +517,11 @@
           </div>
         </div>
 
-        <!-- Schedule -->
+        <!-- Queue (optional time) -->
         <div class="card">
           <h2 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Schedule (Optional)</h2>
-          <input v-model="scheduledAt" type="datetime-local" class="input-field w-full" :min="minDateTime" />
-          <p class="text-xs text-gray-600 mt-1.5">Leave empty to add to end of queue</p>
+          <input v-model="scheduledAt" type="datetime-local" class="input-field w-full" :min="minDateTime" :max="maxDateTime" />
+          <p class="text-xs text-gray-600 mt-1.5">5 minutes – 70 days from now. Leave empty to post at next slot.</p>
         </div>
 
         <!-- Video too long: block posting -->
@@ -575,6 +575,7 @@ import {
 import { CheckCircleIcon } from '@heroicons/vue/24/solid';
 import { useQueueStore } from '../stores/queue.js';
 import { usePendingCompose } from '../composables/usePendingCompose.js';
+import { toUKDatetimeLocal } from '../utils/time.js';
 
 const showToast = inject('showToast');
 const queueStore = useQueueStore();
@@ -615,11 +616,8 @@ const postType = ref('REELS');
 const preflightErrors = ref([]);
 const preflightWarnings = ref([]);
 
-const minDateTime = computed(() => {
-  const now = new Date();
-  now.setMinutes(now.getMinutes() + 1);
-  return now.toISOString().slice(0, 16);
-});
+const minDateTime = computed(() => toUKDatetimeLocal(new Date(Date.now() + 5 * 60 * 1000)));
+const maxDateTime = computed(() => toUKDatetimeLocal(new Date(Date.now() + 70 * 24 * 60 * 60 * 1000)));
 
 // ── Video duration / trim ──
 const videoDuration = ref(0);

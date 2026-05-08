@@ -51,6 +51,12 @@ function initializeSchema(db) {
     );
   `);
 
+  // Migrations: add columns that may not exist in older DBs
+  const queueCols = db.pragma('table_info(queue)').map(c => c.name);
+  if (!queueCols.includes('error_message')) {
+    db.exec('ALTER TABLE queue ADD COLUMN error_message TEXT');
+  }
+
   // Insert default settings keys if they don't exist
   const defaultSettings = [
     'instagram_access_token',

@@ -37,12 +37,13 @@ async function waitForContainerReady(containerId, accessToken, maxWaitMs = 30000
       params: { fields: 'status_code,status', access_token: accessToken },
     });
 
-    const { status_code } = response.data;
+    const { status_code, status } = response.data;
 
     if (status_code === 'FINISHED') return true;
 
     if (status_code === 'ERROR' || status_code === 'EXPIRED') {
-      throw new Error(`Media container failed with status: ${status_code}`);
+      const detail = status && status !== status_code ? ` — ${status}` : '';
+      throw new Error(`Media container failed with status: ${status_code}${detail}`);
     }
 
     await new Promise((resolve) => setTimeout(resolve, interval));
