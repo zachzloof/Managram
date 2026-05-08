@@ -158,6 +158,64 @@ router.get('/file/*', (req, res) => {
   }
 });
 
+// POST /media/trim — trim a video to a start/end time range
+router.post('/trim', async (req, res) => {
+  const { filePath, startTime, endTime } = req.body;
+
+  if (!filePath || startTime == null || endTime == null) {
+    return res.status(400).json({ error: 'filePath, startTime, and endTime are required' });
+  }
+  if (endTime <= startTime) {
+    return res.status(400).json({ error: 'endTime must be greater than startTime' });
+  }
+
+  const rootFolder = getSetting('content_folder_path');
+  if (!rootFolder) return res.status(400).json({ error: 'Content folder not configured' });
+
+  const resolved = path.resolve(filePath);
+  if (!resolved.startsWith(path.resolve(rootFolder))) {
+    return res.status(403).json({ error: 'Access denied' });
+  }
+  if (!fs.pathExistsSync(resolved)) {
+    return res.status(404).json({ error: 'File not found' });
+  }
+
+  const dir = path.dirname(resolved);
+  const ext = path.extname(resolved);
+  const base = path.basename(resolved, ext);
+
+  let outputPath = path.join(dir, `${base}_trimmed${ext}`);
+  let counter = 1;
+  while (fs.pathExistsSync(outputPath)) {
+    outputPath = path.join(dir, `${base}_trimmed_${counter}${ext}`);
+    counter++;
+  }
+
+  try {
+    const ffmpeg = require('fluent-ffmpeg');
+    const ffmpegPath = require('ffmpeg-static');
+    ffmpeg.setFfmpegPath(ffmpegPath);
+
+    await new Promise((resolve, reject) => {
+      ffmpeg(resolved)
+        .setStartTime(startTime)
+        .setDuration(endTime - startTime)
+        .videoCodec('libx264')
+        .audioCodec('aac')
+        .outputOptions(['-preset veryfast', '-crf 23', '-movflags +faststart'])
+        .output(outputPath)
+        .on('end', resolve)
+        .on('error', reject)
+        .run();
+    });
+
+    res.json({ success: true, filePath: outputPath, fileName: path.basename(outputPath) });
+  } catch (err) {
+    console.error('[Media] Trim error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // POST /media/crop — crop a video with ffmpeg
 router.post('/crop', async (req, res) => {
   const { filePath, x, y, width, height } = req.body
