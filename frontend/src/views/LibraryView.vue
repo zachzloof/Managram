@@ -70,6 +70,22 @@
       </button>
     </div>
 
+    <!-- Bulk action bar -->
+    <div v-if="selectedSubpaths.length > 0" class="flex items-center justify-between bg-gray-900 border border-white/10 rounded-xl px-4 py-3">
+      <div class="flex items-center gap-4">
+        <span class="text-white text-sm font-medium">{{ selectedSubpaths.length }} selected</span>
+        <button @click="selectedSubpaths = []" class="text-gray-400 text-xs hover:text-white transition-colors">Deselect all</button>
+        <button @click="selectAll" class="text-gray-400 text-xs hover:text-white transition-colors">Select all</button>
+      </div>
+      <button
+        @click="handleBulkDelete"
+        class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/20 border border-red-500/30 text-red-400 text-sm font-medium hover:bg-red-500/30 transition-colors"
+      >
+        <TrashIcon class="w-4 h-4" />
+        Delete {{ selectedSubpaths.length }} file{{ selectedSubpaths.length > 1 ? 's' : '' }}
+      </button>
+    </div>
+
     <!-- Loading -->
     <div v-if="loading" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
       <div v-for="i in 12" :key="i" class="aspect-square bg-gray-900 rounded-xl animate-pulse border border-white/5" />
@@ -110,10 +126,23 @@
         v-for="file in filteredFiles"
         :key="file.subpath"
         :file="file"
+        :selected="selectedSubpaths.includes(file.subpath)"
+        @toggle="toggleSelect"
         @postNow="handlePostNow"
         @addToQueue="handleAddToQueue"
+        @preview="previewFile = $event"
+        @renamed="handleRenamed"
+        @delete="handleDelete"
       />
     </div>
+
+    <!-- Video Preview Modal -->
+    <VideoPreviewModal
+      v-if="previewFile"
+      :file="previewFile"
+      @close="previewFile = null"
+      @cropped="loadFiles"
+    />
 
     <!-- Post Now Modal -->
     <Teleport to="body">
@@ -186,10 +215,11 @@ import { ref, computed, onMounted, inject } from 'vue'
 import axios from 'axios'
 import {
   ArrowPathIcon, FolderIcon, FolderOpenIcon, PhotoIcon,
-  CheckIcon, BoltIcon, VideoCameraIcon, ChevronRightIcon,
+  CheckIcon, BoltIcon, VideoCameraIcon, ChevronRightIcon, TrashIcon,
 } from '@heroicons/vue/24/outline'
 import { CheckCircleIcon } from '@heroicons/vue/24/solid'
 import MediaCard from '../components/MediaCard.vue'
+import VideoPreviewModal from '../components/VideoPreviewModal.vue'
 import { useSettingsStore } from '../stores/settings.js'
 import { useQueueStore } from '../stores/queue.js'
 
@@ -209,6 +239,9 @@ const folderSuccess = ref(false)
 const updatingFolder = ref(false)
 const activeFilter = ref('all')
 
+const selectedSubpaths = ref([])
+
+const previewFile = ref(null)
 const postNowFile = ref(null)
 const postNowCaption = ref('')
 const posting = ref(false)
@@ -318,6 +351,56 @@ function handleAddToQueue(file) {
   queueStore.addToQueue(file.path, '', null)
     .then(() => showToast(`Added "${file.name}" to queue`, 'success'))
     .catch(err => showToast(err.message, 'error'))
+}
+
+function toggleSelect(file) {
+  const idx = selectedSubpaths.value.indexOf(file.subpath)
+  if (idx === -1) selectedSubpaths.value.push(file.subpath)
+  else selectedSubpaths.value.splice(idx, 1)
+}
+
+function selectAll() {
+  selectedSubpaths.value = filteredFiles.value.map(f => f.subpath)
+}
+
+async function handleDelete(file) {
+  if (!confirm(`Delete "${file.name}"?\n\nThis cannot be undone.`)) return
+  try {
+    await axios.delete('/media/files', { data: { filePaths: [file.path] } })
+    files.value = files.value.filter(f => f.subpath !== file.subpath)
+    selectedSubpaths.value = selectedSubpaths.value.filter(s => s !== file.subpath)
+    showToast(`Deleted "${file.name}"`, 'success')
+  } catch (err) {
+    showToast(err.response?.data?.error || 'Delete failed', 'error')
+  }
+}
+
+async function handleBulkDelete() {
+  const count = selectedSubpaths.value.length
+  if (!confirm(`Delete ${count} file${count > 1 ? 's' : ''}?\n\nThis cannot be undone.`)) return
+  const toDelete = files.value.filter(f => selectedSubpaths.value.includes(f.subpath))
+  try {
+    await axios.delete('/media/files', { data: { filePaths: toDelete.map(f => f.path) } })
+    const deleted = new Set(selectedSubpaths.value)
+    files.value = files.value.filter(f => !deleted.has(f.subpath))
+    selectedSubpaths.value = []
+    showToast(`Deleted ${count} file${count > 1 ? 's' : ''}`, 'success')
+  } catch (err) {
+    showToast(err.response?.data?.error || 'Delete failed', 'error')
+  }
+}
+
+function handleRenamed({ file, newName, newPath }) {
+  const idx = files.value.findIndex(f => f.subpath === file.subpath)
+  if (idx === -1) return
+  const updated = { ...files.value[idx] }
+  const dir = updated.subpath.includes('/') ? updated.subpath.substring(0, updated.subpath.lastIndexOf('/') + 1) : ''
+  updated.name = newName
+  updated.path = newPath
+  updated.subpath = dir + newName
+  updated.url = `/media/file/${(dir + newName).split('/').map(encodeURIComponent).join('/')}`
+  files.value.splice(idx, 1, updated)
+  showToast(`Renamed to "${newName}"`, 'success')
 }
 
 async function submitPostNow() {

@@ -133,6 +133,130 @@ router.get('/file/*', (req, res) => {
   }
 });
 
+// POST /media/crop — crop a video with ffmpeg
+router.post('/crop', async (req, res) => {
+  const { filePath, x, y, width, height } = req.body
+
+  if (!filePath || width == null || height == null) {
+    return res.status(400).json({ error: 'filePath, width and height are required' })
+  }
+
+  const rootFolder = getSetting('content_folder_path')
+  const resolved = path.resolve(filePath)
+  if (!resolved.startsWith(path.resolve(rootFolder))) {
+    return res.status(403).json({ error: 'Access denied' })
+  }
+
+  if (!fs.pathExistsSync(resolved)) {
+    return res.status(404).json({ error: 'File not found' })
+  }
+
+  const dir = path.dirname(resolved)
+  const ext = path.extname(resolved)
+  const base = path.basename(resolved, ext)
+
+  let outputPath = path.join(dir, `${base}_cropped${ext}`)
+  let counter = 1
+  while (fs.pathExistsSync(outputPath)) {
+    outputPath = path.join(dir, `${base}_cropped_${counter}${ext}`)
+    counter++
+  }
+
+  try {
+    const ffmpeg = require('fluent-ffmpeg')
+    const ffmpegPath = require('ffmpeg-static')
+    ffmpeg.setFfmpegPath(ffmpegPath)
+
+    await new Promise((resolve, reject) => {
+      ffmpeg(resolved)
+        .videoFilters(`crop=${Math.round(width)}:${Math.round(height)}:${Math.round(x)}:${Math.round(y)}`)
+        .outputOptions('-c:a copy')
+        .output(outputPath)
+        .on('end', resolve)
+        .on('error', reject)
+        .run()
+    })
+
+    res.json({ success: true, filePath: outputPath, fileName: path.basename(outputPath) })
+  } catch (err) {
+    console.error('[Media] Crop error:', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// DELETE /media/files — delete one or more files
+router.delete('/files', async (req, res) => {
+  const { filePaths } = req.body;
+  if (!Array.isArray(filePaths) || filePaths.length === 0) {
+    return res.status(400).json({ error: 'filePaths array is required' });
+  }
+
+  const rootFolder = getSetting('content_folder_path');
+  const results = [];
+
+  for (const filePath of filePaths) {
+    const resolved = path.resolve(filePath);
+    if (!resolved.startsWith(path.resolve(rootFolder))) {
+      results.push({ filePath, error: 'Access denied' });
+      continue;
+    }
+    if (!fs.pathExistsSync(resolved)) {
+      results.push({ filePath, error: 'File not found' });
+      continue;
+    }
+    try {
+      await fs.remove(resolved);
+      results.push({ filePath, success: true });
+    } catch (err) {
+      results.push({ filePath, error: err.message });
+    }
+  }
+
+  const failed = results.filter(r => r.error);
+  if (failed.length === filePaths.length) {
+    return res.status(500).json({ error: 'All deletions failed', results });
+  }
+  res.json({ deleted: results.filter(r => r.success).length, results });
+});
+
+// PATCH /media/rename — rename a file on disk
+router.patch('/rename', async (req, res) => {
+  const { filePath, newName } = req.body;
+  if (!filePath || !newName) {
+    return res.status(400).json({ error: 'filePath and newName are required' });
+  }
+
+  const rootFolder = getSetting('content_folder_path');
+  const resolved = path.resolve(filePath);
+  if (!resolved.startsWith(path.resolve(rootFolder))) {
+    return res.status(403).json({ error: 'Access denied' });
+  }
+
+  if (!fs.pathExistsSync(resolved)) {
+    return res.status(404).json({ error: 'File not found' });
+  }
+
+  // Reject path separators in newName to prevent traversal
+  if (newName.includes('/') || newName.includes('\\') || newName.includes('..')) {
+    return res.status(400).json({ error: 'Invalid file name' });
+  }
+
+  const dir = path.dirname(resolved);
+  const newPath = path.join(dir, newName);
+
+  if (fs.pathExistsSync(newPath)) {
+    return res.status(409).json({ error: 'A file with that name already exists' });
+  }
+
+  try {
+    await fs.rename(resolved, newPath);
+    res.json({ success: true, newPath, fileName: newName });
+  } catch (err) {
+    console.error('[Media] Rename error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // POST /media/folder — update content folder path
 router.post('/folder', async (req, res) => {
   const { folderPath } = req.body;
