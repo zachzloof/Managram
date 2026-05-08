@@ -1,0 +1,5 @@
+[build]
+buildCommand = "npm install --prefix frontend --include=dev && npm run build --prefix frontend && npm install --prefix backend"
+
+[deploy]
+startCommand = "node backend/src/index.js"
