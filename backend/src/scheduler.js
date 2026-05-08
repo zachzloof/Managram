@@ -5,6 +5,7 @@ const { v4: uuidv4 } = require('uuid');
 const { getSetting, setSetting } = require('./database');
 const instagramService = require('./services/instagram');
 const openaiService = require('./services/openai');
+const { buildMediaUrl } = require('./utils/mediaUrl');
 
 const SUPPORTED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.mp4', '.mov'];
 
@@ -34,23 +35,13 @@ async function getRandomMediaFromFolder(folderPath) {
 async function postMedia(db, mediaPath, caption) {
   const accessToken = getSetting('instagram_access_token');
   const userId = getSetting('instagram_user_id');
-  const publicUrl = getSetting('public_url');
 
   if (!accessToken || !userId) {
     throw new Error('Instagram not connected');
   }
 
-  if (!publicUrl) {
-    throw new Error('Public URL (ngrok) not configured');
-  }
-
-  const contentFolder = getSetting('content_folder_path');
-  if (!contentFolder) throw new Error('Content folder not configured');
-
   const mediaType = getMediaType(mediaPath);
-  const relPath = path.relative(contentFolder, mediaPath).replace(/\\/g, '/');
-  const encodedPath = relPath.split('/').map(encodeURIComponent).join('/');
-  const fileUrl = `${publicUrl.replace(/\/$/, '')}/media/file/${encodedPath}`;
+  const fileUrl = buildMediaUrl(mediaPath);
 
   const containerId = await instagramService.createMediaContainer(
     userId,

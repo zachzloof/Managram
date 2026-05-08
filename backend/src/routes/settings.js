@@ -1,5 +1,6 @@
 const express = require('express');
 const { getAllSettings, setSetting } = require('../database');
+const { isR2Mode } = require('../services/r2');
 
 const router = express.Router();
 
@@ -20,6 +21,7 @@ router.get('/', (req, res) => {
       content_folder_path: settings.content_folder_path || '',
       public_url: settings.public_url || '',
       app_id: settings.app_id || '',
+      storage_mode: isR2Mode() ? 'r2' : 'local',
       // Mask sensitive values
       instagram_access_token: settings.instagram_access_token
         ? maskKey(settings.instagram_access_token)

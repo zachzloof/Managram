@@ -1,5 +1,15 @@
 <template>
   <div class="p-6 space-y-6">
+    <!-- Hidden file input for upload -->
+    <input
+      ref="uploadInput"
+      type="file"
+      multiple
+      accept=".jpg,.jpeg,.png,.gif,.mp4,.mov"
+      class="hidden"
+      @change="handleUploadFiles"
+    />
+
     <!-- Header -->
     <div class="flex items-center justify-between">
       <div>
@@ -7,6 +17,10 @@
         <p class="text-gray-400 text-sm mt-0.5">{{ files.length }} files{{ currentSubpath ? ` in ${currentSubpath}` : '' }}</p>
       </div>
       <div class="flex gap-2">
+        <button v-if="isR2Mode" @click="triggerUpload" :disabled="uploading" class="btn-primary">
+          <ArrowUpTrayIcon class="w-4 h-4" />
+          {{ uploading ? `${uploadProgress}%` : 'Upload' }}
+        </button>
         <button @click="showNewFolderModal = true" class="btn-secondary">
           <FolderPlusIcon class="w-4 h-4" />
           New Folder
@@ -18,8 +32,8 @@
       </div>
     </div>
 
-    <!-- Folder selector -->
-    <div class="card">
+    <!-- Folder selector (local mode only) -->
+    <div v-if="!isR2Mode" class="card">
       <div class="flex items-center gap-3 mb-3">
         <FolderIcon class="w-5 h-5 text-orange-400" />
         <h2 class="text-sm font-semibold text-white">Content Folder</h2>
@@ -45,8 +59,19 @@
       <p class="text-gray-600 text-xs mt-2">Supported: JPG, PNG, GIF, MP4, MOV</p>
     </div>
 
-    <!-- Folder presets bar -->
-    <div class="flex items-center justify-between">
+    <!-- R2 storage indicator -->
+    <div v-if="isR2Mode" class="card flex items-center gap-3">
+      <div class="w-8 h-8 rounded-lg bg-orange-500/10 border border-orange-500/20 flex items-center justify-center shrink-0">
+        <CloudIcon class="w-4 h-4 text-orange-400" />
+      </div>
+      <div>
+        <p class="text-white text-sm font-medium">Cloudflare R2 Storage</p>
+        <p class="text-gray-500 text-xs">Files are stored in your R2 bucket and served via media.managram.uk</p>
+      </div>
+    </div>
+
+    <!-- Folder presets bar (local mode only) -->
+    <div v-if="!isR2Mode" class="flex items-center justify-between">
       <div class="flex items-center gap-2 text-sm text-gray-400">
         <FolderArrowDownIcon class="w-4 h-4" />
         <span>{{ presets.length }} folder preset{{ presets.length !== 1 ? 's' : '' }} configured</span>
@@ -97,6 +122,7 @@
       </div>
       <div class="flex items-center gap-2">
         <button
+          v-if="!isR2Mode"
           @click="openBulkSendTo"
           :disabled="presets.length === 0"
           class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 border border-white/20 text-white text-sm font-medium hover:bg-white/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
@@ -119,8 +145,8 @@
       <div v-for="i in perPage" :key="i" class="aspect-square bg-gray-900 rounded-xl animate-pulse border border-white/5" />
     </div>
 
-    <!-- No folder configured -->
-    <div v-else-if="!folderPath" class="text-center py-16">
+    <!-- No folder configured (local mode only) -->
+    <div v-else-if="!isR2Mode && !folderPath" class="text-center py-16">
       <FolderOpenIcon class="w-16 h-16 text-gray-700 mx-auto mb-4" />
       <h3 class="text-white font-semibold text-lg mb-2">No Content Folder Set</h3>
       <p class="text-gray-400 text-sm">Enter the path to your media folder above.</p>
@@ -404,6 +430,7 @@ import {
   ArrowPathIcon, FolderIcon, FolderOpenIcon, PhotoIcon,
   CheckIcon, ChevronRightIcon, ChevronLeftIcon,
   TrashIcon, FolderArrowDownIcon, Cog6ToothIcon, XMarkIcon, PlusIcon, FolderPlusIcon,
+  ArrowUpTrayIcon, CloudIcon,
 } from '@heroicons/vue/24/outline'
 import { CheckCircleIcon } from '@heroicons/vue/24/solid'
 import MediaCard from '../components/MediaCard.vue'
@@ -417,6 +444,12 @@ const settingsStore = useSettingsStore()
 const { setPendingFile } = usePendingCompose()
 
 const isElectron = !!window.electronAPI
+const isR2Mode = computed(() => settingsStore.storageMode === 'r2')
+
+// Upload
+const uploadInput = ref(null)
+const uploading = ref(false)
+const uploadProgress = ref(0)
 
 const folders = ref([])
 const files = ref([])
@@ -502,6 +535,49 @@ watch(filteredFiles, () => { currentPage.value = 1 })
 function setPerPage(n) {
   perPage.value = n
   currentPage.value = 1
+}
+
+function triggerUpload() {
+  uploadInput.value?.click()
+}
+
+async function handleUploadFiles(event) {
+  const selectedFiles = Array.from(event.target.files)
+  if (!selectedFiles.length) return
+
+  uploading.value = true
+  uploadProgress.value = 0
+  let uploaded = 0
+
+  for (const file of selectedFiles) {
+    const formData = new FormData()
+    formData.append('file', file)
+    if (currentSubpath.value) formData.append('subpath', currentSubpath.value)
+
+    try {
+      await axios.post('/media/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        onUploadProgress: (e) => {
+          uploadProgress.value = Math.round(
+            ((uploaded + (e.loaded / (e.total || e.loaded))) / selectedFiles.length) * 100
+          )
+        },
+      })
+      uploaded++
+      uploadProgress.value = Math.round((uploaded / selectedFiles.length) * 100)
+    } catch (err) {
+      showToast(`Failed to upload "${file.name}": ${err.response?.data?.error || err.message}`, 'error')
+    }
+  }
+
+  uploading.value = false
+  uploadProgress.value = 0
+  event.target.value = ''
+
+  if (uploaded > 0) {
+    await loadFiles()
+    showToast(`Uploaded ${uploaded} file${uploaded > 1 ? 's' : ''}`, 'success')
+  }
 }
 
 async function loadFiles() {

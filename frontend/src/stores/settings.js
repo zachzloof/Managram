@@ -10,6 +10,7 @@ export const useSettingsStore = defineStore('settings', {
     appSecret: '',
     instagramUsername: '',
     instagramProfilePicture: '',
+    storageMode: 'local',
     loading: false,
     error: null,
   }),
@@ -28,6 +29,7 @@ export const useSettingsStore = defineStore('settings', {
         this.appSecret = s.app_secret || '';
         this.instagramUsername = s.instagram_username || '';
         this.instagramProfilePicture = s.instagram_profile_picture || '';
+        this.storageMode = s.storage_mode || 'local';
       } catch (err) {
         this.error = err.response?.data?.error || err.message;
       } finally {

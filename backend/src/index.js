@@ -3,9 +3,11 @@ const express = require('express');
 const cors = require('cors');
 const session = require('express-session');
 const path = require('path');
+const fs = require('fs');
 
 const { getDb, getSetting } = require('./database');
 const { startScheduler } = require('./scheduler');
+const { isR2Mode } = require('./services/r2');
 
 const authRoutes = require('./routes/auth');
 const mediaRoutes = require('./routes/media');
@@ -66,10 +68,19 @@ app.get('/health', (req, res) => {
   });
 });
 
-// 404 handler
-app.use((req, res) => {
-  res.status(404).json({ error: `Route not found: ${req.method} ${req.path}` });
-});
+// Serve built frontend (Railway / production)
+const frontendDist = path.join(__dirname, '../../frontend/dist');
+if (fs.existsSync(frontendDist)) {
+  app.use(express.static(frontendDist));
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(frontendDist, 'index.html'));
+  });
+} else {
+  // Dev mode — API-only 404
+  app.use((req, res) => {
+    res.status(404).json({ error: `Route not found: ${req.method} ${req.path}` });
+  });
+}
 
 // Global error handler
 app.use((err, req, res, next) => {
@@ -93,7 +104,10 @@ async function startServer() {
   return new Promise((resolve) => {
     app.listen(PORT, () => {
       console.log(`[Server] Managram backend running on http://localhost:${PORT}`);
-      console.log(`[Server] Content folder: ${getSetting('content_folder_path') || '(not configured)'}`);
+      console.log(`[Server] Storage mode: ${isR2Mode() ? 'R2 (Cloudflare)' : 'Local filesystem'}`);
+      if (!isR2Mode()) {
+        console.log(`[Server] Content folder: ${getSetting('content_folder_path') || '(not configured)'}`);
+      }
       console.log(`[Server] Instagram connected: ${getSetting('instagram_user_id') ? 'Yes' : 'No'}`);
       resolve();
     });

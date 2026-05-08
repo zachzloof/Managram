@@ -3,6 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const { getSetting } = require('../database');
 const instagramService = require('../services/instagram');
+const { buildMediaUrl } = require('../utils/mediaUrl');
 
 const router = express.Router();
 
@@ -94,27 +95,16 @@ router.post('/publish', async (req, res) => {
 
   const accessToken = getSetting('instagram_access_token');
   const userId = getSetting('instagram_user_id');
-  const publicUrl = getSetting('public_url');
 
   if (!accessToken || !userId) {
     return res.status(401).json({ error: 'Instagram account not connected' });
   }
 
-  if (!publicUrl) {
-    return res
-      .status(400)
-      .json({ error: 'Public URL (ngrok) not configured. Please add it in Settings.' });
-  }
-
-  const contentFolder = getSetting('content_folder_path');
-  if (!contentFolder) return res.status(400).json({ error: 'Content folder not configured' });
-
   let fileUrl = '';
 
   try {
     const mediaType = getMediaType(mediaPath);
-    const relPath = path.relative(contentFolder, mediaPath).replace(/\\/g, '/');
-    fileUrl = `${publicUrl.replace(/\/$/, '')}/media/file/${relPath.split('/').map(encodeURIComponent).join('/')}`;
+    fileUrl = buildMediaUrl(mediaPath);
     console.log(`[Posts] Publishing ${mediaType} to Instagram: ${fileUrl}`);
 
     const containerId = await instagramService.createMediaContainer(
