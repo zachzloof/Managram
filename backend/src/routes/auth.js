@@ -6,9 +6,18 @@ const router = express.Router();
 
 const INSTAGRAM_AUTH_BASE = 'https://api.instagram.com';
 const GRAPH_BASE = 'https://graph.instagram.com/v21.0';
-const FRONTEND_URL = 'http://localhost:5173';
+
+// In production set APP_URL=https://managram.uk in Railway env vars.
+// In local dev the frontend runs on 5173 proxying to 3001.
+function getBaseUrl() {
+  if (process.env.APP_URL) return process.env.APP_URL.replace(/\/$/, '');
+  return 'http://localhost:5173';
+}
 
 function getRedirectUri() {
+  // Production (Railway): APP_URL env var takes priority
+  if (process.env.APP_URL) return `${process.env.APP_URL.replace(/\/$/, '')}/auth/callback`;
+  // Local mode: ngrok URL saved in DB settings
   const publicUrl = getSetting('public_url');
   if (publicUrl) return `${publicUrl.replace(/\/$/, '')}/auth/callback`;
   return 'http://localhost:3001/auth/callback';
@@ -20,7 +29,7 @@ router.get('/instagram', (req, res) => {
 
   if (!appId) {
     return res.redirect(
-      `${FRONTEND_URL}?error=${encodeURIComponent('App ID not configured. Please add it in Settings.')}`
+      `${getBaseUrl()}?error=${encodeURIComponent('App ID not configured. Please add it in Settings.')}`
     );
   }
 
@@ -46,12 +55,12 @@ router.get('/callback', async (req, res) => {
 
   if (error) {
     const message = error_description || error;
-    return res.redirect(`${FRONTEND_URL}?error=${encodeURIComponent(message)}`);
+    return res.redirect(`${getBaseUrl()}?error=${encodeURIComponent(message)}`);
   }
 
   if (!code) {
     return res.redirect(
-      `${FRONTEND_URL}?error=${encodeURIComponent('No authorization code received')}`
+      `${getBaseUrl()}?error=${encodeURIComponent('No authorization code received')}`
     );
   }
 
@@ -61,7 +70,7 @@ router.get('/callback', async (req, res) => {
 
     if (!appId || !appSecret) {
       return res.redirect(
-        `${FRONTEND_URL}?error=${encodeURIComponent('App ID or App Secret not configured')}`
+        `${getBaseUrl()}?error=${encodeURIComponent('App ID or App Secret not configured')}`
       );
     }
 
@@ -108,7 +117,7 @@ router.get('/callback', async (req, res) => {
 
     console.log(`[Auth] Authenticated as @${igAccount.username}`);
 
-    res.redirect(`${FRONTEND_URL}?auth=success`);
+    res.redirect(`${getBaseUrl()}?auth=success`);
   } catch (err) {
     console.error('[Auth] OAuth error:', err.response?.data || err.message);
     const errorMsg =
@@ -116,7 +125,7 @@ router.get('/callback', async (req, res) => {
       err.response?.data?.error?.message ||
       err.message ||
       'Authentication failed';
-    res.redirect(`${FRONTEND_URL}?error=${encodeURIComponent(errorMsg)}`);
+    res.redirect(`${getBaseUrl()}?error=${encodeURIComponent(errorMsg)}`);
   }
 });
 

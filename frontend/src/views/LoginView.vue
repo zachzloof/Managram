@@ -57,8 +57,22 @@
         </p>
       </div>
 
-      <!-- ngrok Tunnel -->
-      <div class="card mb-4">
+      <!-- Redirect URI (R2/hosted mode) -->
+      <div v-if="isR2Mode" class="card mb-4">
+        <h2 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-1">Redirect URI</h2>
+        <p class="text-gray-500 text-xs mb-3">Add this URL to your app's allowed redirect URIs in the Meta Developer portal.</p>
+        <div class="rounded-lg bg-white/5 border border-white/10 p-3">
+          <div class="flex items-center gap-2">
+            <code class="text-green-400 text-xs flex-1 break-all">{{ redirectUri }}</code>
+            <button @click="copyRedirectUri" class="shrink-0 text-xs text-gray-400 hover:text-white transition-colors px-2 py-1 rounded bg-white/5 hover:bg-white/10">
+              {{ copied ? 'Copied!' : 'Copy' }}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ngrok Tunnel (local/Electron mode only) -->
+      <div v-if="!isR2Mode" class="card mb-4">
         <h2 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-1">HTTPS Tunnel</h2>
         <p class="text-gray-500 text-xs mb-4">Required so Instagram can reach your local server. Get a free authtoken at <span class="text-purple-400">ngrok.com</span></p>
 
@@ -120,7 +134,7 @@
       <!-- Connect button -->
       <button
         @click="connectInstagram"
-        :disabled="!appId || (!appSecret && !hasStoredAppSecret) || !ngrokUrl || connecting"
+        :disabled="!appId || (!appSecret && !hasStoredAppSecret) || (!isR2Mode && !ngrokUrl) || connecting"
         class="w-full py-3 rounded-xl font-semibold text-white bg-instagram-gradient
                hover:opacity-90 active:scale-95 transition-all duration-200
                disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
@@ -135,7 +149,7 @@
         {{ connecting ? 'Connecting...' : 'Connect with Instagram' }}
       </button>
 
-      <p v-if="!ngrokUrl" class="text-center text-gray-600 text-xs mt-3">
+      <p v-if="!isR2Mode && !ngrokUrl" class="text-center text-gray-600 text-xs mt-3">
         Start the tunnel above to enable the Connect button
       </p>
 
@@ -219,7 +233,10 @@ const showManualToken = ref(false)
 const manualToken = ref('')
 const manualTokenLoading = ref(false)
 const manualTokenError = ref('')
+const isR2Mode = ref(false)
 let saveTimeout = null
+
+const redirectUri = computed(() => `${window.location.origin}/auth/callback`)
 
 const ngrokStatusLabel = computed(() => {
   if (ngrokStatus.value === 'connecting') return 'Starting tunnel...'
@@ -228,12 +245,21 @@ const ngrokStatusLabel = computed(() => {
   return 'Disconnected'
 })
 
-const setupSteps = computed(() => [
-  { label: 'Create an Instagram Developer App', done: !!appId.value && !!appSecret.value },
-  { label: 'Start HTTPS tunnel and copy redirect URI', done: !!ngrokUrl.value },
-  { label: 'Add redirect URI to Facebook portal', done: !!ngrokUrl.value },
-  { label: 'Connect your Instagram account below', done: false },
-])
+const setupSteps = computed(() => {
+  if (isR2Mode.value) {
+    return [
+      { label: 'Create an Instagram Developer App', done: !!appId.value && !!appSecret.value },
+      { label: `Add ${redirectUri.value} to Facebook portal`, done: !!appId.value },
+      { label: 'Connect your Instagram account below', done: false },
+    ]
+  }
+  return [
+    { label: 'Create an Instagram Developer App', done: !!appId.value && !!appSecret.value },
+    { label: 'Start HTTPS tunnel and copy redirect URI', done: !!ngrokUrl.value },
+    { label: 'Add redirect URI to Facebook portal', done: !!ngrokUrl.value },
+    { label: 'Connect your Instagram account below', done: false },
+  ]
+})
 
 async function saveCredentials() {
   clearTimeout(saveTimeout)
@@ -282,14 +308,14 @@ async function startTunnel() {
 }
 
 async function copyRedirectUri() {
-  const uri = `${ngrokUrl.value}/auth/callback`
+  const uri = isR2Mode.value ? redirectUri.value : `${ngrokUrl.value}/auth/callback`
   await navigator.clipboard.writeText(uri)
   copied.value = true
   setTimeout(() => { copied.value = false }, 2000)
 }
 
 async function connectInstagram() {
-  if (!appId.value || (!appSecret.value && !hasStoredAppSecret.value) || !ngrokUrl.value) return
+  if (!appId.value || (!appSecret.value && !hasStoredAppSecret.value) || (!isR2Mode.value && !ngrokUrl.value)) return
   connecting.value = true
   try {
     const body = { app_id: appId.value }
@@ -322,6 +348,7 @@ onMounted(async () => {
     if (s.app_id) appId.value = s.app_id
     if (s.app_secret) hasStoredAppSecret.value = true
     if (s.ngrok_authtoken) hasStoredAuthtoken.value = true
+    isR2Mode.value = s.storage_mode === 'r2'
 
     // Check if tunnel is already running (Electron auto-started it)
     if (window.electronAPI) {
