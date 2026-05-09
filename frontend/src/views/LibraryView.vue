@@ -418,6 +418,44 @@
         </div>
       </Transition>
 
+      <!-- ── Delete Confirmation Modal ── -->
+      <Transition name="modal">
+        <div
+          v-if="pendingDeleteFiles.length"
+          class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+          @click.self="pendingDeleteFiles = []"
+        >
+          <div class="bg-gray-900 border border-white/10 rounded-2xl p-6 w-full max-w-sm shadow-2xl">
+            <div class="flex items-center gap-3 mb-4">
+              <div class="w-10 h-10 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center shrink-0">
+                <TrashIcon class="w-5 h-5 text-red-400" />
+              </div>
+              <h3 class="text-lg font-semibold text-white">
+                Delete {{ pendingDeleteFiles.length > 1 ? `${pendingDeleteFiles.length} files` : 'file' }}?
+              </h3>
+            </div>
+            <p class="text-gray-400 text-sm mb-5">
+              <span v-if="pendingDeleteFiles.length === 1">
+                <span class="text-white font-medium">{{ pendingDeleteFiles[0].name }}</span> will be permanently deleted.
+              </span>
+              <span v-else>
+                {{ pendingDeleteFiles.length }} files will be permanently deleted.
+              </span>
+              This cannot be undone.
+            </p>
+            <div class="flex gap-2">
+              <button @click="pendingDeleteFiles = []" class="btn-secondary flex-1">Cancel</button>
+              <button
+                @click="doDelete"
+                class="flex-1 py-2.5 px-4 rounded-xl font-semibold text-white bg-red-600 hover:bg-red-500 active:scale-95 transition-all"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+
     </Teleport>
   </div>
 </template>
@@ -478,6 +516,9 @@ const presetError = ref('')
 // Send to
 const pendingSendFiles = ref([])
 const sending = ref(false)
+
+// Delete confirmation
+const pendingDeleteFiles = ref([])
 
 // New folder
 const showNewFolderModal = ref(false)
@@ -733,28 +774,23 @@ function selectAll() {
   selectedSubpaths.value = filteredFiles.value.map(f => f.subpath)
 }
 
-async function handleDelete(file) {
-  if (!confirm(`Delete "${file.name}"?\n\nThis cannot be undone.`)) return
-  try {
-    await axios.delete('/media/files', { data: { filePaths: [file.path] } })
-    files.value = files.value.filter(f => f.subpath !== file.subpath)
-    selectedSubpaths.value = selectedSubpaths.value.filter(s => s !== file.subpath)
-    showToast(`Deleted "${file.name}"`, 'success')
-  } catch (err) {
-    showToast(err.response?.data?.error || 'Delete failed', 'error')
-  }
+function handleDelete(file) {
+  pendingDeleteFiles.value = [file]
 }
 
-async function handleBulkDelete() {
-  const count = selectedSubpaths.value.length
-  if (!confirm(`Delete ${count} file${count > 1 ? 's' : ''}?\n\nThis cannot be undone.`)) return
-  const toDelete = files.value.filter(f => selectedSubpaths.value.includes(f.subpath))
+function handleBulkDelete() {
+  pendingDeleteFiles.value = files.value.filter(f => selectedSubpaths.value.includes(f.subpath))
+}
+
+async function doDelete() {
+  const toDelete = pendingDeleteFiles.value
+  pendingDeleteFiles.value = []
   try {
     await axios.delete('/media/files', { data: { filePaths: toDelete.map(f => f.path) } })
-    const deleted = new Set(selectedSubpaths.value)
-    files.value = files.value.filter(f => !deleted.has(f.subpath))
-    selectedSubpaths.value = []
-    showToast(`Deleted ${count} file${count > 1 ? 's' : ''}`, 'success')
+    const deletedSubpaths = new Set(toDelete.map(f => f.subpath))
+    files.value = files.value.filter(f => !deletedSubpaths.has(f.subpath))
+    selectedSubpaths.value = selectedSubpaths.value.filter(s => !deletedSubpaths.has(s))
+    showToast(`Deleted ${toDelete.length} file${toDelete.length > 1 ? 's' : ''}`, 'success')
   } catch (err) {
     showToast(err.response?.data?.error || 'Delete failed', 'error')
   }

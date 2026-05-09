@@ -1,15 +1,18 @@
 <template>
   <div
-    class="group relative rounded-xl overflow-hidden bg-gray-800 border transition-all duration-200 cursor-pointer aspect-square"
-    :class="selected ? 'border-pink-500' : 'border-white/5 hover:border-white/20'"
+    class="relative rounded-xl overflow-hidden bg-gray-800 border transition-all duration-200 cursor-pointer aspect-square"
+    :class="selected ? 'border-pink-500' : isHovered ? 'border-white/20' : 'border-white/5'"
     @click="$emit('select', file)"
+    @mouseenter="isHovered = true"
+    @mouseleave="isHovered = false"
   >
     <!-- Image -->
     <img
       v-if="file.type === 'image'"
       :src="file.url"
       :alt="file.name"
-      class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+      class="w-full h-full object-cover transition-transform duration-300"
+      :class="isHovered ? 'scale-105' : ''"
       loading="lazy"
       @error="onLoadError"
     />
@@ -32,7 +35,7 @@
     <!-- Stars (top-left) -->
     <div
       class="absolute top-2 left-2 z-10 flex gap-px transition-opacity duration-150"
-      :class="currentRating > 0 ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'"
+      :class="currentRating > 0 || isHovered ? 'opacity-100' : 'opacity-0'"
       @click.stop
     >
       <button
@@ -58,7 +61,7 @@
     <!-- Checkbox (top-right) -->
     <div
       class="absolute top-2 right-2 z-10 transition-opacity duration-150"
-      :class="selected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'"
+      :class="selected || isHovered ? 'opacity-100' : 'opacity-0'"
       @click.stop="$emit('toggle', file)"
     >
       <div
@@ -82,8 +85,8 @@
 
     <!-- Hover overlay -->
     <div
-      class="absolute inset-0 bg-black/60 backdrop-blur-sm opacity-0 group-hover:opacity-100
-             transition-all duration-200 flex flex-col items-center justify-center gap-2 p-3"
+      class="absolute inset-0 bg-black/60 backdrop-blur-sm transition-all duration-200 flex flex-col items-center justify-center gap-2 p-3"
+      :class="isHovered || renaming ? 'opacity-100' : 'opacity-0 pointer-events-none'"
     >
       <!-- Filename with rename pencil -->
       <div v-if="!renaming" class="flex items-center gap-1 w-full px-2 justify-center">
@@ -175,6 +178,7 @@ const props = defineProps({
 const emit = defineEmits(['select', 'toggle', 'postNow', 'preview', 'renamed', 'delete', 'sendTo', 'rated']);
 
 const loadError = ref(false);
+const isHovered = ref(false);
 const renaming = ref(false);
 const renameValue = ref('');
 const renameInput = ref(null);
