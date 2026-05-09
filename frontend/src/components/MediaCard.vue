@@ -115,11 +115,11 @@
       <p class="text-gray-400 text-xs">{{ file.sizeFormatted }}</p>
       <div class="flex gap-1.5 mt-1 flex-wrap justify-center">
         <button
-          v-if="file.type === 'video'"
           @click.stop="$emit('preview', file)"
           class="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white/10 border border-white/20 text-white text-xs font-medium hover:bg-white/20 transition-colors"
         >
-          <PlayIcon class="w-3 h-3" />
+          <PlayIcon v-if="file.type === 'video'" class="w-3 h-3" />
+          <MagnifyingGlassPlusIcon v-else class="w-3 h-3" />
           Preview
         </button>
         <button
@@ -162,6 +162,7 @@ import {
   TrashIcon,
   FolderArrowDownIcon,
   StarIcon,
+  MagnifyingGlassPlusIcon,
 } from '@heroicons/vue/24/outline';
 import { StarIcon as StarIconSolid } from '@heroicons/vue/24/solid';
 

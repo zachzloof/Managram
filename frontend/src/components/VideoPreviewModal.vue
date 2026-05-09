@@ -7,7 +7,8 @@
     >
       <!-- Header -->
       <div class="flex items-center justify-between px-6 py-4 border-b border-white/10 shrink-0">
-        <div class="flex items-center gap-1 bg-white/5 rounded-xl p-1">
+        <!-- Tab switcher (videos only) -->
+        <div v-if="file.type === 'video'" class="flex items-center gap-1 bg-white/5 rounded-xl p-1">
           <button
             v-for="tab in ['preview', 'crop']"
             :key="tab"
@@ -20,6 +21,10 @@
             <span v-if="tab === 'preview'">▶ Preview</span>
             <span v-else>✂ Crop</span>
           </button>
+        </div>
+        <!-- Image indicator -->
+        <div v-else class="px-5 py-2 rounded-xl bg-white/5 text-sm font-medium text-gray-400">
+          Photo
         </div>
 
         <div class="flex items-center gap-4">
@@ -39,16 +44,24 @@
       <!-- ── PREVIEW TAB ── -->
       <div v-if="activeTab === 'preview'" class="flex-1 flex items-center justify-center p-6 min-h-0">
         <video
+          v-if="file.type === 'video'"
           :src="file.url"
           controls
           autoplay
           class="rounded-2xl shadow-2xl max-w-full"
           style="max-height: calc(100vh - 120px)"
         />
+        <img
+          v-else
+          :src="file.url"
+          :alt="file.name"
+          class="rounded-2xl shadow-2xl max-w-full max-h-full object-contain"
+          style="max-height: calc(100vh - 120px)"
+        />
       </div>
 
-      <!-- ── CROP TAB ── -->
-      <div v-if="activeTab === 'crop'" class="flex-1 flex min-h-0">
+      <!-- ── CROP TAB (videos only) ── -->
+      <div v-if="activeTab === 'crop' && file.type === 'video'" class="flex-1 flex min-h-0">
 
         <!-- Video + crop overlay -->
         <div
