@@ -14,7 +14,7 @@
       @error="onLoadError"
     />
 
-    <!-- Video placeholder (no preloading) -->
+    <!-- Video placeholder -->
     <div v-else class="w-full h-full bg-gray-900 flex items-center justify-center">
       <div class="w-14 h-14 rounded-full bg-black/60 flex items-center justify-center">
         <PlayIcon class="w-7 h-7 text-white ml-1" />
@@ -29,16 +29,33 @@
       </div>
     </div>
 
-    <!-- Video badge -->
+    <!-- Stars (top-left) -->
     <div
-      v-if="file.type === 'video'"
-      class="absolute top-2 left-2 px-1.5 py-0.5 rounded bg-black/60 text-white text-xs font-medium flex items-center gap-1"
+      class="absolute top-2 left-2 z-10 flex gap-px transition-opacity duration-150"
+      :class="currentRating > 0 ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'"
+      @click.stop
     >
-      <PlayIcon class="w-3 h-3" />
-      VIDEO
+      <button
+        v-for="n in 5"
+        :key="n"
+        @click="setRating(n)"
+        @mouseenter="hoverRating = n"
+        @mouseleave="hoverRating = 0"
+        class="transition-transform hover:scale-125"
+        :title="`${n} star${n > 1 ? 's' : ''}`"
+      >
+        <StarIconSolid
+          v-if="n <= (hoverRating || currentRating)"
+          class="w-3.5 h-3.5 text-yellow-400 drop-shadow"
+        />
+        <StarIcon
+          v-else
+          class="w-3.5 h-3.5 text-white/50 drop-shadow"
+        />
+      </button>
     </div>
 
-    <!-- Checkbox (top-right, visible on hover or when selected) -->
+    <!-- Checkbox (top-right) -->
     <div
       class="absolute top-2 right-2 z-10 transition-opacity duration-150"
       :class="selected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'"
@@ -52,6 +69,15 @@
       >
         <CheckIcon v-if="selected" class="w-3 h-3 text-white" />
       </div>
+    </div>
+
+    <!-- Video badge (bottom-left) -->
+    <div
+      v-if="file.type === 'video'"
+      class="absolute bottom-2 left-2 px-1.5 py-0.5 rounded bg-black/60 text-white text-xs font-medium flex items-center gap-1"
+    >
+      <PlayIcon class="w-3 h-3" />
+      VIDEO
     </div>
 
     <!-- Hover overlay -->
@@ -135,7 +161,9 @@ import {
   XMarkIcon,
   TrashIcon,
   FolderArrowDownIcon,
+  StarIcon,
 } from '@heroicons/vue/24/outline';
+import { StarIcon as StarIconSolid } from '@heroicons/vue/24/solid';
 
 const props = defineProps({
   file: { type: Object, required: true },
@@ -143,15 +171,30 @@ const props = defineProps({
   showPostNow: { type: Boolean, default: true },
 });
 
-const emit = defineEmits(['select', 'toggle', 'postNow', 'preview', 'renamed', 'delete', 'sendTo']);
+const emit = defineEmits(['select', 'toggle', 'postNow', 'preview', 'renamed', 'delete', 'sendTo', 'rated']);
 
 const loadError = ref(false);
 const renaming = ref(false);
 const renameValue = ref('');
 const renameInput = ref(null);
+const hoverRating = ref(0);
+const currentRating = ref(props.file.rating || 0);
 
 function onLoadError() {
   loadError.value = true;
+}
+
+async function setRating(n) {
+  // Click the current rating to clear it
+  const newRating = n === currentRating.value ? 0 : n;
+  currentRating.value = newRating;
+  try {
+    await axios.post('/media/rating', { subpath: props.file.subpath, rating: newRating });
+    emit('rated', { file: props.file, rating: newRating });
+  } catch (err) {
+    console.error('Failed to save rating:', err.message);
+    currentRating.value = props.file.rating || 0;
+  }
 }
 
 function getExt(name) {

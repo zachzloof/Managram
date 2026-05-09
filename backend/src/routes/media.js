@@ -4,7 +4,7 @@ const fs = require('fs-extra');
 const mime = require('mime-types');
 const multer = require('multer');
 const os = require('os');
-const { getSetting, setSetting } = require('../database');
+const { getSetting, setSetting, getRatingsForSubpaths, setRating } = require('../database');
 const r2 = require('../services/r2');
 
 const router = express.Router();
@@ -80,6 +80,11 @@ function buildR2FileEntry(obj) {
   };
 }
 
+function attachRatings(files) {
+  const ratings = getRatingsForSubpaths(files.map((f) => f.subpath));
+  return files.map((f) => ({ ...f, rating: ratings[f.subpath] || 0 }));
+}
+
 // ── Multer (disk storage → R2 or local) ────────────────────────────────────
 
 const upload = multer({
@@ -118,10 +123,12 @@ router.get('/files', async (req, res) => {
               return { name, subpath: fullSubpath };
             });
 
-      const files = objects
-        .filter((o) => o.type === 'file' && isMediaFile(o.key))
-        .map(buildR2FileEntry)
-        .sort((a, b) => new Date(b.modifiedAt) - new Date(a.modifiedAt));
+      const files = attachRatings(
+        objects
+          .filter((o) => o.type === 'file' && isMediaFile(o.key))
+          .map(buildR2FileEntry)
+          .sort((a, b) => new Date(b.modifiedAt) - new Date(a.modifiedAt))
+      );
 
       return res.json({ folders, files });
     }
@@ -142,8 +149,11 @@ router.get('/files', async (req, res) => {
     if (!exists) return res.json({ folders: [], files: [], error: 'Folder not found' });
 
     if (req.query.recursive === 'true') {
-      const files = await collectRecursive(rootFolder, targetDir, subpath);
-      files.sort((a, b) => new Date(b.modifiedAt) - new Date(a.modifiedAt));
+      const files = attachRatings(
+        (await collectRecursive(rootFolder, targetDir, subpath)).sort(
+          (a, b) => new Date(b.modifiedAt) - new Date(a.modifiedAt)
+        )
+      );
       return res.json({ folders: [], files });
     }
 
@@ -167,7 +177,7 @@ router.get('/files', async (req, res) => {
     folders.sort((a, b) => a.name.localeCompare(b.name));
     files.sort((a, b) => new Date(b.modifiedAt) - new Date(a.modifiedAt));
 
-    res.json({ folders, files });
+    res.json({ folders, files: attachRatings(files) });
   } catch (err) {
     console.error('[Media] Error listing files:', err.message);
     res.status(500).json({ error: err.message });
@@ -277,10 +287,6 @@ router.post('/trim', async (req, res) => {
 
   if (r2.isR2Mode()) {
     const ext = path.extname(filePath);
-    const baseName = path.basename(filePath, ext);
-    const dir = filePath.includes('/') ? filePath.substring(0, filePath.lastIndexOf('/') + 1) : '';
-    const outputKey = `${dir}${baseName}_trimmed${ext}`;
-
     let tmpInput, tmpOutput;
     try {
       tmpInput = await r2.downloadToTemp(filePath);
@@ -299,9 +305,10 @@ router.post('/trim', async (req, res) => {
           .run();
       });
 
+      // Overwrite the same key
       const contentType = mime.lookup(tmpOutput) || 'video/mp4';
-      await r2.uploadStream(outputKey, fs.createReadStream(tmpOutput), contentType);
-      res.json({ success: true, filePath: outputKey, fileName: path.basename(outputKey) });
+      await r2.uploadStream(filePath, fs.createReadStream(tmpOutput), contentType);
+      res.json({ success: true, filePath, fileName: path.basename(filePath) });
     } catch (err) {
       console.error('[Media] R2 trim error:', err.message);
       res.status(500).json({ error: err.message });
@@ -324,14 +331,8 @@ router.post('/trim', async (req, res) => {
     return res.status(404).json({ error: 'File not found' });
   }
 
-  const dir = path.dirname(resolved);
   const ext = path.extname(resolved);
-  const base = path.basename(resolved, ext);
-  let outputPath = path.join(dir, `${base}_trimmed${ext}`);
-  let counter = 1;
-  while (fs.pathExistsSync(outputPath)) {
-    outputPath = path.join(dir, `${base}_trimmed_${counter++}${ext}`);
-  }
+  const tmpOutput = path.join(os.tmpdir(), `managram_trim_${Date.now()}${ext}`);
 
   try {
     await new Promise((resolve, reject) => {
@@ -341,13 +342,16 @@ router.post('/trim', async (req, res) => {
         .videoCodec('libx264')
         .audioCodec('aac')
         .outputOptions(['-preset veryfast', '-crf 23', '-movflags +faststart'])
-        .output(outputPath)
+        .output(tmpOutput)
         .on('end', resolve)
         .on('error', reject)
         .run();
     });
-    res.json({ success: true, filePath: outputPath, fileName: path.basename(outputPath) });
+    // Replace original with trimmed output
+    await fs.move(tmpOutput, resolved, { overwrite: true });
+    res.json({ success: true, filePath: resolved, fileName: path.basename(resolved) });
   } catch (err) {
+    fs.unlink(tmpOutput, () => {});
     console.error('[Media] Trim error:', err.message);
     res.status(500).json({ error: err.message });
   }
@@ -596,6 +600,16 @@ router.post('/folder', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// POST /media/rating — set star rating (0 = clear)
+router.post('/rating', (req, res) => {
+  const { subpath, rating } = req.body;
+  if (!subpath) return res.status(400).json({ error: 'subpath required' });
+  const r = parseInt(rating);
+  if (isNaN(r) || r < 0 || r > 5) return res.status(400).json({ error: 'rating must be 0–5' });
+  setRating(subpath, r);
+  res.json({ success: true, subpath, rating: r });
 });
 
 module.exports = router;

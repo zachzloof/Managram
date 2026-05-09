@@ -51,6 +51,13 @@ function initializeSchema(db) {
     );
   `);
 
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS media_ratings (
+      subpath TEXT PRIMARY KEY,
+      rating  INTEGER NOT NULL
+    );
+  `);
+
   // Migrations: add columns that may not exist in older DBs
   const queueCols = db.pragma('table_info(queue)').map(c => c.name);
   if (!queueCols.includes('error_message')) {
@@ -100,4 +107,23 @@ function getAllSettings() {
   return result;
 }
 
-module.exports = { getDb, getSetting, setSetting, getAllSettings };
+function getRatingsForSubpaths(subpaths) {
+  if (!subpaths.length) return {};
+  const db = getDb();
+  const placeholders = subpaths.map(() => '?').join(',');
+  const rows = db.prepare(`SELECT subpath, rating FROM media_ratings WHERE subpath IN (${placeholders})`).all(subpaths);
+  const result = {};
+  for (const row of rows) result[row.subpath] = row.rating;
+  return result;
+}
+
+function setRating(subpath, rating) {
+  const db = getDb();
+  if (rating === 0) {
+    db.prepare('DELETE FROM media_ratings WHERE subpath = ?').run(subpath);
+  } else {
+    db.prepare('INSERT OR REPLACE INTO media_ratings (subpath, rating) VALUES (?, ?)').run(subpath, rating);
+  }
+}
+
+module.exports = { getDb, getSetting, setSetting, getAllSettings, getRatingsForSubpaths, setRating };

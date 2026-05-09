@@ -290,7 +290,7 @@
               <p v-if="trimError" class="text-red-400 text-xs">{{ trimError }}</p>
               <p v-if="trimSuccess" class="text-green-400 text-xs flex items-center gap-1.5">
                 <CheckCircleIcon class="w-3.5 h-3.5 shrink-0" />
-                Saved as {{ trimSavedName }}
+                Trimmed successfully
               </p>
               <button
                 @click="saveTrim"
@@ -302,9 +302,9 @@
                   <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
                 </svg>
                 <ScissorsIcon v-else class="w-4 h-4" />
-                {{ trimSaving ? 'Trimming…' : 'Save Trimmed Video' }}
+                {{ trimSaving ? 'Trimming…' : 'Trim Video' }}
               </button>
-              <p class="text-gray-600 text-xs text-center">Saves as a new file — original untouched</p>
+              <p class="text-gray-600 text-xs text-center">Overwrites the original file</p>
             </div>
           </div>
         </div>
@@ -678,29 +678,15 @@ async function saveTrim() {
       startTime: trimStart.value,
       endTime: trimEnd.value,
     });
-    trimSavedName.value = response.data.fileName;
     trimSuccess.value = true;
-
-    const origSubpath = selectedFile.value.subpath || selectedFile.value.name;
-    const parts = origSubpath.split('/');
-    parts[parts.length - 1] = response.data.fileName;
-    const newSubpath = parts.join('/');
-    const encoded = newSubpath.split('/').map(encodeURIComponent).join('/');
 
     setTimeout(() => {
       const newDur = trimEnd.value - trimStart.value;
-      selectedFile.value = {
-        ...selectedFile.value,
-        path: response.data.filePath,
-        name: response.data.fileName,
-        subpath: newSubpath,
-        url: `/media/file/${encoded}`,
-      };
       videoDuration.value = newDur;
       trimStart.value = 0;
       trimEnd.value = newDur;
       mediaTab.value = 'preview';
-      showToast(`Saved as ${response.data.fileName}`, 'success');
+      showToast('Video trimmed', 'success');
     }, 800);
   } catch (err) {
     trimError.value = err.response?.data?.error || 'Trim failed — check ffmpeg is available';
