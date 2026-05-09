@@ -97,7 +97,7 @@ router.post('/send', async (req, res) => {
     }
 
     try {
-      await fs.copy(resolved, destPath);
+      await fs.move(resolved, destPath);
       results.push({ filePath, destPath, fileName: path.basename(destPath), success: true });
     } catch (err) {
       results.push({ filePath, error: err.message });
@@ -106,7 +106,7 @@ router.post('/send', async (req, res) => {
 
   const failed = results.filter(r => r.error);
   if (failed.length === filePaths.length) {
-    return res.status(500).json({ error: 'All copies failed', results });
+    return res.status(500).json({ error: 'All moves failed', results });
   }
 
   res.json({ copied: results.filter(r => r.success).length, results });

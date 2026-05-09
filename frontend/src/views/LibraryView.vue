@@ -382,7 +382,7 @@
               <div>
                 <h3 class="text-lg font-semibold text-white">Send to...</h3>
                 <p class="text-gray-500 text-xs mt-0.5">
-                  {{ pendingSendFiles.length }} file{{ pendingSendFiles.length > 1 ? 's' : '' }} will be copied
+                  {{ pendingSendFiles.length }} file{{ pendingSendFiles.length > 1 ? 's' : '' }} will be moved
                 </p>
               </div>
               <button @click="pendingSendFiles = []" class="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-gray-400 hover:text-white transition-all">
@@ -702,15 +702,17 @@ function openBulkSendTo() {
 
 async function executeSendTo(preset) {
   sending.value = true
+  const movedSubpaths = new Set(pendingSendFiles.value.map(f => f.subpath))
   const filePaths = pendingSendFiles.value.map(f => f.path)
-  const count = filePaths.length
   try {
     const response = await axios.post('/presets/send', { filePaths, presetId: preset.id })
     pendingSendFiles.value = []
     selectedSubpaths.value = []
-    showToast(`Copied ${response.data.copied} file${response.data.copied > 1 ? 's' : ''} to "${preset.name}"`, 'success')
+    // Remove moved files from the current view immediately
+    files.value = files.value.filter(f => !movedSubpaths.has(f.subpath))
+    showToast(`Moved ${response.data.copied} file${response.data.copied > 1 ? 's' : ''} to "${preset.name}"`, 'success')
   } catch (err) {
-    showToast(err.response?.data?.error || 'Send failed', 'error')
+    showToast(err.response?.data?.error || 'Move failed', 'error')
   } finally {
     sending.value = false
   }
