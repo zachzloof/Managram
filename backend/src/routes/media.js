@@ -46,7 +46,12 @@ async function buildFileEntry(rootFolder, filePath, relPath) {
 }
 
 async function collectRecursive(rootFolder, dir, relBase) {
-  const entries = await fs.readdir(dir, { withFileTypes: true });
+  let entries;
+  try {
+    entries = await fs.readdir(dir, { withFileTypes: true });
+  } catch {
+    return [];
+  }
   const files = [];
   for (const entry of entries) {
     if (entry.name.startsWith('.')) continue;
@@ -55,7 +60,11 @@ async function collectRecursive(rootFolder, dir, relBase) {
     if (entry.isDirectory()) {
       files.push(...(await collectRecursive(rootFolder, entryPath, relPath)));
     } else if (entry.isFile() && isMediaFile(entry.name)) {
-      files.push(await buildFileEntry(rootFolder, entryPath, relPath));
+      try {
+        files.push(await buildFileEntry(rootFolder, entryPath, relPath));
+      } catch {
+        // skip files we can't stat (e.g. iCloud placeholders, permission-denied)
+      }
     }
   }
   return files;
@@ -170,7 +179,11 @@ router.get('/files', async (req, res) => {
         });
       } else if (entry.isFile() && isMediaFile(entry.name)) {
         const relPath = subpath ? `${subpath}/${entry.name}` : entry.name;
-        files.push(await buildFileEntry(rootFolder, path.join(targetDir, entry.name), relPath));
+        try {
+          files.push(await buildFileEntry(rootFolder, path.join(targetDir, entry.name), relPath));
+        } catch {
+          // skip files we can't stat (e.g. iCloud placeholders, permission-denied)
+        }
       }
     }
 
