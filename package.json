@@ -18,12 +18,15 @@
     "wait-on": "^7.2.0"
   },
   "dependencies": {
-    "@ngrok/ngrok": "^1.4.0"
+    "@ngrok/ngrok": "^1.4.0",
+    "jsonwebtoken": "^9.0.3"
   },
   "build": {
     "appId": "com.managram.app",
     "productName": "Managram",
-    "directories": { "output": "dist-electron" },
+    "directories": {
+      "output": "dist-electron"
+    },
     "files": [
       "electron/**/*",
       "backend/src/**/*",
@@ -33,8 +36,14 @@
       "!**/node_modules/.cache"
     ],
     "extraResources": [],
-    "win": { "target": "nsis" },
-    "mac": { "target": "dmg" },
-    "linux": { "target": "AppImage" }
+    "win": {
+      "target": "nsis"
+    },
+    "mac": {
+      "target": "dmg"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
   }
 }
