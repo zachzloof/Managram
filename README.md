@@ -98,6 +98,17 @@ development without a live license server running, set:
 ```bash
 MANAGRAM_SKIP_LICENSE=true npm run dev
 ```
+On Windows PowerShell, that's two lines instead of one (PowerShell has no
+inline `VAR=value command` form): `$env:MANAGRAM_SKIP_LICENSE = "true"` then
+`npm run dev`.
+
+This only has any effect when running from source (`npm run dev` /
+`electron .`) — it's gated behind Electron's own `app.isPackaged` flag,
+which reflects how the app was actually built/launched and can't be set or
+spoofed by any environment variable. A real customer running the
+distributed installer can never make `app.isPackaged` false, so this
+variable is silently ignored in any packaged build, on purpose — don't
+remove that gate when touching this code later.
 
 ### First-time setup in the app
 1. Enter Facebook App ID and App Secret on the connect screen

@@ -3,7 +3,13 @@ const path = require('path')
 const licenseManager = require('./license-manager')
 
 const isDev = process.env.NODE_ENV === 'development'
-const SKIP_LICENSE = process.env.MANAGRAM_SKIP_LICENSE === 'true'
+// `app.isPackaged` is set by Electron itself based on how the app was
+// actually built/launched — unlike NODE_ENV or any other env var, it can't
+// be set or spoofed from outside the process. A real customer running the
+// distributed installer can never make this false, so MANAGRAM_SKIP_LICENSE
+// only ever has an effect when running from source (npm run dev / electron .
+// directly) — never in a packaged build, regardless of what env vars are set.
+const SKIP_LICENSE = !app.isPackaged && process.env.MANAGRAM_SKIP_LICENSE === 'true'
 
 let mainWindow = null
 
