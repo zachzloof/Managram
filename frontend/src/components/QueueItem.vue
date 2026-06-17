@@ -67,7 +67,7 @@
       <button
         v-if="item.status === 'pending' || item.status === 'failed'"
         @click="$emit('postNow', item)"
-        class="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-white hover:bg-instagram-gradient transition-all duration-200"
+        class="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-white hover:bg-accent-500 transition-all duration-200"
         title="Post Now"
       >
         <BoltIcon class="w-4 h-4" />

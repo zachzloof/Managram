@@ -1,19 +1,18 @@
 <template>
   <div class="min-h-screen bg-gray-950 flex items-center justify-center p-4 relative overflow-hidden">
-    <!-- Background gradient orbs -->
+    <!-- Background accent glow -->
     <div class="absolute inset-0 overflow-hidden pointer-events-none">
-      <div class="absolute -top-1/4 -left-1/4 w-[600px] h-[600px] rounded-full bg-pink-500/10 blur-3xl animate-pulse-slow" />
-      <div class="absolute -bottom-1/4 -right-1/4 w-[600px] h-[600px] rounded-full bg-purple-500/10 blur-3xl animate-pulse-slow" style="animation-delay: 1s" />
-      <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] rounded-full bg-orange-500/5 blur-3xl animate-pulse-slow" style="animation-delay: 2s" />
+      <div class="absolute -top-1/4 -left-1/4 w-[600px] h-[600px] rounded-full bg-accent-500/10 blur-3xl animate-pulse-slow" />
+      <div class="absolute -bottom-1/4 -right-1/4 w-[500px] h-[500px] rounded-full bg-accent-600/[0.06] blur-3xl animate-pulse-slow" style="animation-delay: 1s" />
     </div>
 
     <div class="w-full max-w-md relative z-10">
       <!-- Logo -->
       <div class="text-center mb-8">
-        <div class="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-instagram-gradient shadow-glow-pink mb-4">
-          <span class="text-white text-3xl font-bold">M</span>
+        <div class="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-accent-500 mb-4">
+          <span class="text-white text-3xl font-bold font-data">M</span>
         </div>
-        <h1 class="text-4xl font-bold text-white mb-2">Managram</h1>
+        <h1 class="text-4xl font-bold text-white mb-2 tracking-tight">Managram</h1>
         <p class="text-gray-400">Professional Instagram content management</p>
       </div>
 
@@ -74,7 +73,7 @@
       <!-- ngrok Tunnel (local/Electron mode only) -->
       <div v-if="!isR2Mode" class="card mb-4">
         <h2 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-1">HTTPS Tunnel</h2>
-        <p class="text-gray-500 text-xs mb-4">Required so Instagram can reach your local server. Get a free authtoken at <span class="text-purple-400">ngrok.com</span></p>
+        <p class="text-gray-500 text-xs mb-4">Required so Instagram can reach your local server. Get a free authtoken at <span class="text-accent-400">ngrok.com</span></p>
 
         <div class="space-y-3">
           <div>
@@ -135,8 +134,8 @@
       <button
         @click="connectInstagram"
         :disabled="!appId || (!appSecret && !hasStoredAppSecret) || (!isR2Mode && !ngrokUrl) || connecting"
-        class="w-full py-3 rounded-xl font-semibold text-white bg-instagram-gradient
-               hover:opacity-90 active:scale-95 transition-all duration-200
+        class="w-full py-3 rounded-lg font-semibold text-white bg-accent-500
+               hover:bg-accent-400 active:scale-95 transition-all duration-200
                disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
       >
         <svg v-if="connecting" class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
@@ -197,8 +196,8 @@
           <button
             @click="connectWithToken"
             :disabled="!manualToken.trim() || manualTokenLoading"
-            class="w-full py-2.5 rounded-xl text-sm font-semibold text-white bg-instagram-gradient
-                   hover:opacity-90 transition-all duration-200
+            class="w-full py-2.5 rounded-lg text-sm font-semibold text-white bg-accent-500
+                   hover:bg-accent-400 transition-all duration-200
                    disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             <svg v-if="manualTokenLoading" class="animate-spin w-3.5 h-3.5" fill="none" viewBox="0 0 24 24">

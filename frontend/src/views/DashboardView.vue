@@ -25,12 +25,12 @@
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
       <div class="card group hover:border-white/10 transition-all duration-200">
         <div class="flex items-start justify-between mb-3">
-          <div class="w-9 h-9 rounded-lg bg-pink-500/20 flex items-center justify-center">
-            <UserGroupIcon class="w-5 h-5 text-pink-400" />
+          <div class="w-9 h-9 rounded-md bg-accent-500/10 flex items-center justify-center">
+            <UserGroupIcon class="w-5 h-5 text-accent-400" />
           </div>
           <span class="text-xs text-gray-600">Followers</span>
         </div>
-        <div class="text-2xl font-bold text-white">
+        <div class="text-2xl font-bold text-white font-data">
           {{ accountInfo ? formatNumber(accountInfo.followers_count) : '—' }}
         </div>
         <p class="text-xs text-gray-500 mt-0.5">Total followers</p>
@@ -38,12 +38,12 @@
 
       <div class="card group hover:border-white/10 transition-all duration-200">
         <div class="flex items-start justify-between mb-3">
-          <div class="w-9 h-9 rounded-lg bg-purple-500/20 flex items-center justify-center">
-            <PhotoIcon class="w-5 h-5 text-purple-400" />
+          <div class="w-9 h-9 rounded-md bg-white/[0.04] flex items-center justify-center">
+            <PhotoIcon class="w-5 h-5 text-gray-300" />
           </div>
           <span class="text-xs text-gray-600">Posts</span>
         </div>
-        <div class="text-2xl font-bold text-white">
+        <div class="text-2xl font-bold text-white font-data">
           {{ accountInfo ? formatNumber(accountInfo.media_count) : '—' }}
         </div>
         <p class="text-xs text-gray-500 mt-0.5">Total posts</p>
@@ -51,23 +51,23 @@
 
       <div class="card group hover:border-white/10 transition-all duration-200">
         <div class="flex items-start justify-between mb-3">
-          <div class="w-9 h-9 rounded-lg bg-orange-500/20 flex items-center justify-center">
-            <QueueListIcon class="w-5 h-5 text-orange-400" />
+          <div class="w-9 h-9 rounded-md bg-emerald-500/10 flex items-center justify-center">
+            <QueueListIcon class="w-5 h-5 text-emerald-400" />
           </div>
           <span class="text-xs text-gray-600">Queued</span>
         </div>
-        <div class="text-2xl font-bold text-white">{{ queueStore.pendingCount }}</div>
+        <div class="text-2xl font-bold text-white font-data">{{ queueStore.pendingCount }}</div>
         <p class="text-xs text-gray-500 mt-0.5">Posts in queue</p>
       </div>
 
       <div class="card group hover:border-white/10 transition-all duration-200">
         <div class="flex items-start justify-between mb-3">
-          <div class="w-9 h-9 rounded-lg bg-blue-500/20 flex items-center justify-center">
-            <ClockIcon class="w-5 h-5 text-blue-400" />
+          <div class="w-9 h-9 rounded-md bg-sky-500/10 flex items-center justify-center">
+            <ClockIcon class="w-5 h-5 text-sky-400" />
           </div>
           <span class="text-xs text-gray-600">Next Post</span>
         </div>
-        <div class="text-xl font-bold text-white truncate">{{ nextScheduledTime || '—' }}</div>
+        <div class="text-xl font-bold text-white truncate font-data">{{ nextScheduledTime || '—' }}</div>
         <p class="text-xs text-gray-500 mt-0.5">Scheduled post</p>
       </div>
     </div>
@@ -90,7 +90,7 @@
         <div
           v-for="i in 6"
           :key="i"
-          class="aspect-square bg-gray-900 rounded-xl animate-pulse border border-white/5"
+          class="aspect-square bg-gray-900 rounded-lg animate-pulse border border-white/5"
         />
       </div>
 
@@ -102,7 +102,7 @@
           :href="post.permalink"
           target="_blank"
           rel="noopener noreferrer"
-          class="relative aspect-square rounded-xl overflow-hidden bg-gray-900 group border border-white/5 hover:border-white/20 transition-all duration-200"
+          class="relative aspect-square rounded-lg overflow-hidden bg-gray-900 group border border-white/5 hover:border-white/20 transition-all duration-200"
         >
           <img
             :src="post.media_type === 'VIDEO' ? post.thumbnail_url : post.media_url"
@@ -146,7 +146,7 @@
         to="/library"
         class="card hover:border-white/10 transition-all duration-200 group cursor-pointer flex items-center gap-3"
       >
-        <div class="w-10 h-10 rounded-xl bg-instagram-gradient flex items-center justify-center shadow-glow-pink shrink-0">
+        <div class="w-10 h-10 rounded-md bg-accent-500 flex items-center justify-center shrink-0">
           <PhotoIcon class="w-5 h-5 text-white" />
         </div>
         <div>
@@ -160,7 +160,7 @@
         to="/schedule"
         class="card hover:border-white/10 transition-all duration-200 group cursor-pointer flex items-center gap-3"
       >
-        <div class="w-10 h-10 rounded-xl bg-instagram-gradient flex items-center justify-center shadow-glow-pink shrink-0">
+        <div class="w-10 h-10 rounded-md bg-accent-500 flex items-center justify-center shrink-0">
           <CalendarDaysIcon class="w-5 h-5 text-white" />
         </div>
         <div>
@@ -174,7 +174,7 @@
         to="/settings"
         class="card hover:border-white/10 transition-all duration-200 group cursor-pointer flex items-center gap-3"
       >
-        <div class="w-10 h-10 rounded-xl bg-instagram-gradient flex items-center justify-center shadow-glow-pink shrink-0">
+        <div class="w-10 h-10 rounded-md bg-accent-500 flex items-center justify-center shrink-0">
           <CogIcon class="w-5 h-5 text-white" />
         </div>
         <div>

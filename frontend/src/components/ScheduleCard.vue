@@ -3,8 +3,8 @@
     <div class="flex items-start gap-4">
       <!-- Icon -->
       <div
-        class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-all duration-200"
-        :class="schedule.active ? 'bg-instagram-gradient shadow-glow-pink' : 'bg-white/5'"
+        class="w-10 h-10 rounded-md flex items-center justify-center shrink-0 transition-all duration-200"
+        :class="schedule.active ? 'bg-accent-500' : 'bg-white/5'"
       >
         <ClockIcon class="w-5 h-5 text-white" />
       </div>
@@ -30,7 +30,7 @@
               :key="day.short"
               class="w-6 h-6 rounded text-xs font-medium flex items-center justify-center transition-all duration-200"
               :class="schedule.days.includes(day.short)
-                ? 'bg-instagram-gradient text-white'
+                ? 'bg-accent-500 text-white'
                 : 'bg-white/5 text-gray-600'"
             >
               {{ day.label }}
@@ -57,7 +57,7 @@
         <button
           @click="$emit('toggle', schedule)"
           class="relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-200 focus:outline-none"
-          :class="schedule.active ? 'bg-instagram-gradient' : 'bg-gray-700'"
+          :class="schedule.active ? 'bg-accent-500' : 'bg-gray-700'"
         >
           <span
             class="inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform duration-200"

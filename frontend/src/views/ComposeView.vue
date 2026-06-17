@@ -4,7 +4,7 @@
 
     <!-- Loading/redirect state: selectedFile is null until onMounted fires -->
     <div v-if="!selectedFile" class="flex-1 flex items-center justify-center">
-      <div class="w-8 h-8 rounded-full border-2 border-white/10 border-t-pink-500 animate-spin" />
+      <div class="w-8 h-8 rounded-full border-2 border-white/10 border-t-accent-500 animate-spin" />
     </div>
 
     <!-- Full compose UI -->
@@ -123,12 +123,12 @@
                     @click="applyRatio(preset)"
                     class="flex flex-col items-center gap-1.5 p-2.5 rounded-xl border text-xs transition-all"
                     :class="activeRatio === preset.label
-                      ? 'border-pink-500/50 bg-pink-500/10 text-pink-400'
+                      ? 'border-accent-500/50 bg-accent-500/10 text-accent-400'
                       : 'border-white/10 bg-white/5 text-gray-400 hover:border-white/20 hover:text-white'"
                   >
                     <div
                       class="border-2 rounded-sm"
-                      :class="activeRatio === preset.label ? 'border-pink-400' : 'border-gray-500'"
+                      :class="activeRatio === preset.label ? 'border-accent-400' : 'border-gray-500'"
                       :style="{ width: `${preset.iconW}px`, height: `${preset.iconH}px` }"
                     />
                     <span class="font-semibold">{{ preset.label }}</span>
@@ -162,7 +162,7 @@
               <button
                 @click="saveCrop"
                 :disabled="!cropReady || saving"
-                class="w-full py-2.5 rounded-xl font-semibold text-sm text-white bg-instagram-gradient hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all"
+                class="w-full py-2.5 rounded-lg font-semibold text-sm text-white bg-accent-500 hover:bg-accent-400 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all"
               >
                 <svg v-if="saving" class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
                   <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
@@ -221,7 +221,7 @@
                 />
                 <!-- Selected region -->
                 <div
-                  class="absolute top-0 bottom-0 bg-pink-500/25 border-t border-b border-pink-500/40"
+                  class="absolute top-0 bottom-0 bg-accent-500/25 border-t border-b border-accent-500/40"
                   :style="{
                     left: `${(trimStart / videoDuration) * 100}%`,
                     width: `${((trimEnd - trimStart) / videoDuration) * 100}%`
@@ -229,7 +229,7 @@
                 />
                 <!-- Start handle -->
                 <div
-                  class="absolute top-0 bottom-0 w-2 bg-pink-500 rounded-sm cursor-ew-resize z-10 flex items-center justify-center hover:bg-pink-400"
+                  class="absolute top-0 bottom-0 w-2 bg-accent-500 rounded-sm cursor-ew-resize z-10 flex items-center justify-center hover:bg-accent-400"
                   :style="{ left: `calc(${(trimStart / videoDuration) * 100}% - 4px)` }"
                   @mousedown.prevent="startTrimDrag('start')"
                 >
@@ -237,7 +237,7 @@
                 </div>
                 <!-- End handle -->
                 <div
-                  class="absolute top-0 bottom-0 w-2 bg-pink-500 rounded-sm cursor-ew-resize z-10 flex items-center justify-center hover:bg-pink-400"
+                  class="absolute top-0 bottom-0 w-2 bg-accent-500 rounded-sm cursor-ew-resize z-10 flex items-center justify-center hover:bg-accent-400"
                   :style="{ left: `calc(${(trimEnd / videoDuration) * 100}% - 4px)` }"
                   @mousedown.prevent="startTrimDrag('end')"
                 >
@@ -246,9 +246,9 @@
               </div>
               <!-- Time labels -->
               <div class="flex justify-between text-xs mt-1.5 px-0.5">
-                <span class="text-pink-400 font-mono">{{ formatTime(trimStart) }}</span>
+                <span class="text-accent-400 font-data">{{ formatTime(trimStart) }}</span>
                 <span class="text-gray-500">{{ formatTime(trimDuration) }} selected</span>
-                <span class="text-pink-400 font-mono">{{ formatTime(trimEnd) }}</span>
+                <span class="text-accent-400 font-data">{{ formatTime(trimEnd) }}</span>
               </div>
             </div>
 
@@ -295,7 +295,7 @@
               <button
                 @click="saveTrim"
                 :disabled="trimSaving || videoDuration === 0 || trimDuration <= 0 || trimDuration > 90"
-                class="w-full py-2.5 rounded-xl font-semibold text-sm text-white bg-instagram-gradient hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all"
+                class="w-full py-2.5 rounded-lg font-semibold text-sm text-white bg-accent-500 hover:bg-accent-400 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all"
               >
                 <svg v-if="trimSaving" class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
                   <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
@@ -317,7 +317,7 @@
               :key="pt"
               @click="postType = pt"
               class="flex-1 py-1.5 rounded-lg text-xs font-medium transition-all"
-              :class="postType === pt ? 'bg-instagram-gradient text-white' : 'bg-white/5 text-gray-400 hover:text-white hover:bg-white/10'"
+              :class="postType === pt ? 'bg-accent-500 text-white' : 'bg-white/5 text-gray-400 hover:text-white hover:bg-white/10'"
             >
               {{ pt === 'FEED' ? 'Feed Video' : 'Reels' }}
             </button>
@@ -361,7 +361,7 @@
               class="w-full flex items-center justify-between px-4 py-3 bg-white/5 hover:bg-white/10 transition-colors text-left"
             >
               <span class="flex items-center gap-2 text-sm font-medium text-white">
-                <SparklesIcon class="w-4 h-4 text-pink-400" />
+                <SparklesIcon class="w-4 h-4 text-accent-400" />
                 Generate with AI
               </span>
               <ChevronRightIcon
@@ -378,7 +378,7 @@
                     :key="s.value"
                     @click="aiStyle = s.value"
                     class="px-3 py-1 rounded-lg text-xs font-medium transition-all"
-                    :class="aiStyle === s.value ? 'bg-instagram-gradient text-white' : 'bg-white/5 text-gray-400 hover:text-white hover:bg-white/10'"
+                    :class="aiStyle === s.value ? 'bg-accent-500 text-white' : 'bg-white/5 text-gray-400 hover:text-white hover:bg-white/10'"
                   >
                     {{ s.label }}
                   </button>
@@ -432,7 +432,7 @@
                   :key="i"
                   @click="caption = opt"
                   class="w-full text-left p-3 rounded-xl border text-xs text-gray-300 leading-relaxed transition-all hover:text-white"
-                  :class="caption === opt ? 'border-pink-500/50 bg-pink-500/10 text-white' : 'border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10'"
+                  :class="caption === opt ? 'border-accent-500/50 bg-accent-500/10 text-white' : 'border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10'"
                 >
                   {{ opt }}
                 </button>
@@ -460,7 +460,7 @@
                 <button
                   @click="postMeta.likeCountHidden = !postMeta.likeCountHidden"
                   class="relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors cursor-pointer"
-                  :class="postMeta.likeCountHidden ? 'bg-pink-500' : 'bg-gray-600'"
+                  :class="postMeta.likeCountHidden ? 'bg-accent-500' : 'bg-gray-600'"
                 >
                   <span
                     class="pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transition duration-200 ease-in-out"
@@ -476,7 +476,7 @@
                 <button
                   @click="postMeta.commentsDisabled = !postMeta.commentsDisabled"
                   class="relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors cursor-pointer"
-                  :class="postMeta.commentsDisabled ? 'bg-pink-500' : 'bg-gray-600'"
+                  :class="postMeta.commentsDisabled ? 'bg-accent-500' : 'bg-gray-600'"
                 >
                   <span
                     class="pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transition duration-200 ease-in-out"
@@ -492,7 +492,7 @@
                 <button
                   @click="postMeta.shareToFeed = !postMeta.shareToFeed"
                   class="relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors cursor-pointer"
-                  :class="postMeta.shareToFeed ? 'bg-pink-500' : 'bg-gray-600'"
+                  :class="postMeta.shareToFeed ? 'bg-accent-500' : 'bg-gray-600'"
                 >
                   <span
                     class="pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transition duration-200 ease-in-out"

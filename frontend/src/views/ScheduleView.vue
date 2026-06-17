@@ -103,7 +103,7 @@
                     @click="toggleDay(day.short)"
                     class="flex-1 h-9 rounded-lg text-sm font-medium transition-all duration-200"
                     :class="form.days.includes(day.short)
-                      ? 'bg-instagram-gradient text-white shadow-sm'
+                      ? 'bg-accent-500 text-white'
                       : 'bg-white/5 text-gray-400 hover:bg-white/10'"
                   >
                     {{ day.label }}
@@ -113,15 +113,15 @@
 
               <!-- Quick day selectors -->
               <div class="flex gap-2">
-                <button @click="setDays('weekdays')" class="text-xs text-gray-400 hover:text-pink-400 transition-colors">
+                <button @click="setDays('weekdays')" class="text-xs text-gray-400 hover:text-accent-400 transition-colors">
                   Weekdays
                 </button>
                 <span class="text-gray-700">•</span>
-                <button @click="setDays('weekends')" class="text-xs text-gray-400 hover:text-pink-400 transition-colors">
+                <button @click="setDays('weekends')" class="text-xs text-gray-400 hover:text-accent-400 transition-colors">
                   Weekends
                 </button>
                 <span class="text-gray-700">•</span>
-                <button @click="setDays('all')" class="text-xs text-gray-400 hover:text-pink-400 transition-colors">
+                <button @click="setDays('all')" class="text-xs text-gray-400 hover:text-accent-400 transition-colors">
                   Every Day
                 </button>
               </div>
@@ -136,7 +136,7 @@
                   class="input-field"
                 />
                 <p class="text-xs text-gray-600 mt-1">
-                  Use <code class="text-pink-400">{auto}</code> for AI-generated captions, or write a fixed caption
+                  Use <code class="text-accent-400">{auto}</code> for AI-generated captions, or write a fixed caption
                 </p>
               </div>
             </div>

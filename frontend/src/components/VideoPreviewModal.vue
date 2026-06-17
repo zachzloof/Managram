@@ -128,12 +128,12 @@
                   @click="applyRatio(preset)"
                   class="flex flex-col items-center gap-2 p-3 rounded-xl border transition-all duration-200"
                   :class="activeRatio === preset.label
-                    ? 'border-pink-500/50 bg-pink-500/10 text-pink-400'
+                    ? 'border-accent-500/50 bg-accent-500/10 text-accent-400'
                     : 'border-white/10 bg-white/5 text-gray-400 hover:border-white/20 hover:text-white'"
                 >
                   <div
                     class="border-2 rounded-sm"
-                    :class="activeRatio === preset.label ? 'border-pink-400' : 'border-gray-500'"
+                    :class="activeRatio === preset.label ? 'border-accent-400' : 'border-gray-500'"
                     :style="{ width: `${preset.iconW}px`, height: `${preset.iconH}px` }"
                   />
                   <span class="text-xs font-semibold">{{ preset.label }}</span>
@@ -174,8 +174,8 @@
             <button
               @click="saveCrop"
               :disabled="!cropReady || saving"
-              class="w-full py-3 rounded-xl font-semibold text-white bg-instagram-gradient
-                     hover:opacity-90 active:scale-95 transition-all duration-200
+              class="w-full py-3 rounded-lg font-semibold text-white bg-accent-500
+                     hover:bg-accent-400 active:scale-95 transition-all duration-200
                      disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               <svg v-if="saving" class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
