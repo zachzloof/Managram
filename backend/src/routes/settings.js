@@ -1,6 +1,7 @@
 const express = require('express');
 const { getAllSettings, setSetting } = require('../database');
 const { isR2Mode } = require('../services/r2');
+const { sendError, asyncRoute } = require('../utils/appError');
 
 const router = express.Router();
 
@@ -10,7 +11,7 @@ function maskKey(value) {
 }
 
 // GET /settings — get all settings (mask API keys)
-router.get('/', (req, res) => {
+router.get('/', asyncRoute((req, res) => {
   try {
     const settings = getAllSettings();
 
@@ -33,12 +34,12 @@ router.get('/', (req, res) => {
 
     res.json({ settings: masked });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err, 'GET /settings');
   }
-});
+}));
 
 // POST /settings — bulk update settings
-router.post('/', (req, res) => {
+router.post('/', asyncRoute((req, res) => {
   const allowedKeys = [
     'content_folder_path',
     'openai_api_key',
@@ -65,8 +66,8 @@ router.post('/', (req, res) => {
 
     res.json({ success: true, updated: Object.keys(updates) });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err, 'POST /settings');
   }
-});
+}));
 
 module.exports = router;

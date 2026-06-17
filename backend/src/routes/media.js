@@ -8,6 +8,7 @@ const { getSetting, setSetting, getRatingsForSubpaths, getRatingsForContentIds, 
 const r2 = require('../services/r2');
 const mediaIdentity = require('../services/mediaIdentity');
 const contentIdUtil = require('../utils/contentId');
+const { sendError, asyncRoute } = require('../utils/appError');
 
 const router = express.Router();
 
@@ -134,7 +135,7 @@ const upload = multer({
 // ── Routes ──────────────────────────────────────────────────────────────────
 
 // GET /media/files — list folders + media files
-router.get('/files', async (req, res) => {
+router.get('/files', asyncRoute(async (req, res) => {
   try {
     const subpath = req.query.subpath || '';
 
@@ -216,13 +217,12 @@ router.get('/files', async (req, res) => {
 
     res.json({ folders, files: attachRatings(files) });
   } catch (err) {
-    console.error('[Media] Error listing files:', err.message);
-    res.status(500).json({ error: err.message });
+    sendError(res, err, 'GET /media/files');
   }
-});
+}));
 
 // GET /media/file/* — serve or redirect a file
-router.get('/file/*', (req, res) => {
+router.get('/file/*', asyncRoute((req, res) => {
   const keyOrRel = req.params[0]
     .split('/')
     .map(decodeURIComponent)
@@ -265,10 +265,10 @@ router.get('/file/*', (req, res) => {
     res.setHeader('Cache-Control', 'public, max-age=3600');
     fs.createReadStream(filePath).pipe(res);
   }
-});
+}));
 
 // POST /media/upload — upload a file to R2 or local content folder
-router.post('/upload', upload.single('file'), async (req, res) => {
+router.post('/upload', upload.single('file'), asyncRoute(async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file provided' });
 
   const subpath = req.body.subpath || '';
@@ -302,13 +302,12 @@ router.post('/upload', upload.single('file'), async (req, res) => {
     return res.json({ success: true, key: relPath, url: `/media/file/${encoded}` });
   } catch (err) {
     fs.unlink(tmpPath, () => {});
-    console.error('[Media] Upload error:', err.message);
-    res.status(500).json({ error: err.message });
+    sendError(res, err, 'POST /media/upload');
   }
-});
+}));
 
 // POST /media/trim — trim a video
-router.post('/trim', async (req, res) => {
+router.post('/trim', asyncRoute(async (req, res) => {
   const { filePath, startTime, endTime } = req.body;
 
   if (!filePath || startTime == null || endTime == null) {
@@ -356,8 +355,7 @@ router.post('/trim', async (req, res) => {
       if (existingId) mediaIdentity.relinkIdentity(ACCOUNT_ID, existingId, filePath);
       res.json({ success: true, filePath, fileName: path.basename(filePath) });
     } catch (err) {
-      console.error('[Media] R2 trim error:', err.message);
-      res.status(500).json({ error: err.message });
+      sendError(res, err, 'POST /media/trim (R2)');
     } finally {
       if (tmpInput) fs.unlink(tmpInput, () => {});
       if (tmpOutput) fs.unlink(tmpOutput, () => {});
@@ -417,13 +415,12 @@ router.post('/trim', async (req, res) => {
     res.json({ success: true, filePath: resolved, fileName: path.basename(resolved) });
   } catch (err) {
     fs.unlink(tmpOutput, () => {});
-    console.error('[Media] Trim error:', err.message);
-    res.status(500).json({ error: err.message });
+    sendError(res, err, 'POST /media/trim');
   }
-});
+}));
 
 // POST /media/crop — crop a video
-router.post('/crop', async (req, res) => {
+router.post('/crop', asyncRoute(async (req, res) => {
   const { filePath, x, y, width, height } = req.body;
 
   if (!filePath || width == null || height == null) {
@@ -464,8 +461,7 @@ router.post('/crop', async (req, res) => {
       if (existingId) mediaIdentity.relinkIdentity(ACCOUNT_ID, existingId, outputKey);
       res.json({ success: true, filePath: outputKey, fileName: path.basename(outputKey) });
     } catch (err) {
-      console.error('[Media] R2 crop error:', err.message);
-      res.status(500).json({ error: err.message });
+      sendError(res, err, 'POST /media/crop (R2)');
     } finally {
       if (tmpInput) fs.unlink(tmpInput, () => {});
       if (tmpOutput) fs.unlink(tmpOutput, () => {});
@@ -509,13 +505,12 @@ router.post('/crop', async (req, res) => {
     if (existingId) mediaIdentity.relinkIdentity(ACCOUNT_ID, existingId, outputPath);
     res.json({ success: true, filePath: outputPath, fileName: path.basename(outputPath) });
   } catch (err) {
-    console.error('[Media] Crop error:', err.message);
-    res.status(500).json({ error: err.message });
+    sendError(res, err, 'POST /media/crop');
   }
-});
+}));
 
 // DELETE /media/files — delete one or more files
-router.delete('/files', async (req, res) => {
+router.delete('/files', asyncRoute(async (req, res) => {
   const { filePaths } = req.body;
   if (!Array.isArray(filePaths) || filePaths.length === 0) {
     return res.status(400).json({ error: 'filePaths array is required' });
@@ -529,8 +524,7 @@ router.delete('/files', async (req, res) => {
         results: filePaths.map((k) => ({ filePath: k, success: true })),
       });
     } catch (err) {
-      console.error('[Media] R2 delete error:', err.message);
-      return res.status(500).json({ error: err.message });
+      return sendError(res, err, 'DELETE /media/files (R2)');
     }
   }
 
@@ -560,10 +554,10 @@ router.delete('/files', async (req, res) => {
     return res.status(500).json({ error: 'All deletions failed', results });
   }
   res.json({ deleted: results.filter((r) => r.success).length, results });
-});
+}));
 
 // PATCH /media/rename — rename a file
-router.patch('/rename', async (req, res) => {
+router.patch('/rename', asyncRoute(async (req, res) => {
   const { filePath, newName } = req.body;
   if (!filePath || !newName) {
     return res.status(400).json({ error: 'filePath and newName are required' });
@@ -580,8 +574,7 @@ router.patch('/rename', async (req, res) => {
       mediaIdentity.relinkBySubpathIfCached(ACCOUNT_ID, filePath, newKey);
       return res.json({ success: true, newPath: newKey, fileName: newName });
     } catch (err) {
-      console.error('[Media] R2 rename error:', err.message);
-      return res.status(500).json({ error: err.message });
+      return sendError(res, err, 'PATCH /media/rename (R2)');
     }
   }
 
@@ -605,13 +598,12 @@ router.patch('/rename', async (req, res) => {
     mediaIdentity.relinkBySubpathIfCached(ACCOUNT_ID, resolved, newPath);
     res.json({ success: true, newPath, fileName: newName });
   } catch (err) {
-    console.error('[Media] Rename error:', err.message);
-    res.status(500).json({ error: err.message });
+    sendError(res, err, 'PATCH /media/rename');
   }
-});
+}));
 
 // POST /media/mkdir — create a subfolder
-router.post('/mkdir', async (req, res) => {
+router.post('/mkdir', asyncRoute(async (req, res) => {
   const { name, subpath } = req.body;
   if (!name) return res.status(400).json({ error: 'name is required' });
   if (name.includes('/') || name.includes('\\') || name.includes('..')) {
@@ -625,8 +617,7 @@ router.post('/mkdir', async (req, res) => {
       const newSubpath = subpath ? `${subpath}/${name}` : name;
       return res.json({ success: true, name, subpath: newSubpath });
     } catch (err) {
-      console.error('[Media] R2 mkdir error:', err.message);
-      return res.status(500).json({ error: err.message });
+      return sendError(res, err, 'POST /media/mkdir (R2)');
     }
   }
 
@@ -650,13 +641,12 @@ router.post('/mkdir', async (req, res) => {
     await fs.mkdir(newDir);
     res.json({ success: true, name, subpath: subpath ? `${subpath}/${name}` : name });
   } catch (err) {
-    console.error('[Media] mkdir error:', err.message);
-    res.status(500).json({ error: err.message });
+    sendError(res, err, 'POST /media/mkdir');
   }
-});
+}));
 
 // POST /media/folder — set local content folder path (local mode only)
-router.post('/folder', async (req, res) => {
+router.post('/folder', asyncRoute(async (req, res) => {
   if (r2.isR2Mode()) {
     return res.json({ success: true, message: 'R2 mode — content folder not used' });
   }
@@ -674,12 +664,12 @@ router.post('/folder', async (req, res) => {
     setSetting('content_folder_path', folderPath);
     res.json({ success: true, folderPath });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err, 'POST /media/folder');
   }
-});
+}));
 
 // POST /media/rating — set star rating (0 = clear)
-router.post('/rating', async (req, res) => {
+router.post('/rating', asyncRoute(async (req, res) => {
   const { subpath, rating } = req.body;
   if (!subpath) return res.status(400).json({ error: 'subpath required' });
   const r = parseInt(rating);
@@ -691,10 +681,10 @@ router.post('/rating', async (req, res) => {
 
   setRating(subpath, r, contentId);
   res.json({ success: true, subpath, rating: r, contentId });
-});
+}));
 
 // GET /media/identity — full detail for one file: content id, tags, post history
-router.get('/identity', async (req, res) => {
+router.get('/identity', asyncRoute(async (req, res) => {
   const subpath = req.query.subpath;
   if (!subpath) return res.status(400).json({ error: 'subpath required' });
 
@@ -713,9 +703,8 @@ router.get('/identity', async (req, res) => {
 
     res.json({ contentId, tags, history: historyWithMetrics });
   } catch (err) {
-    console.error('[Media] identity lookup error:', err.message);
-    res.status(500).json({ error: err.message });
+    sendError(res, err, 'GET /media/identity');
   }
-});
+}));
 
 module.exports = router;

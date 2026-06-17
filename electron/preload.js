@@ -10,4 +10,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getLicenseStatus: () => ipcRenderer.invoke('license-status'),
   licenseLogin: (email, password) => ipcRenderer.invoke('license-login', { email, password }),
   onLicenseStatus: (cb) => ipcRenderer.on('license-status', (_, status) => cb(status)),
+  onBackendError: (cb) => ipcRenderer.on('backend-error', (_, err) => cb(err)),
 })

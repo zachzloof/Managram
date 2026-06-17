@@ -219,6 +219,34 @@ technical bypass. Specifics:
   running. The shipped Electron installer always starts closed until a real
   check succeeds.
 
+## Error handling & debugging
+
+Every unexpected error — anywhere in the app — surfaces to the user and logs
+a short code (`ERR-A3F9C1`) you can search for directly in the server logs:
+
+- **Backend**: every route is wrapped so a thrown error or rejected promise
+  always produces a response instead of the request hanging forever
+  (`backend/src/utils/appError.js`). Ordinary validation responses ("name is
+  required") don't get a code — only unexpected failures do. A genuinely
+  uncaught exception or rejected promise outside a request is also caught at
+  the process level and logged with a code; running standalone it exits
+  (so Railway restarts it), but embedded in Electron it notifies the open
+  window instead of silently killing the desktop app.
+- **Frontend**: an axios interceptor logs every failed API call's full detail
+  to the console and appends the backend's code to the error message in
+  place, so existing toast messages pick it up automatically. A Vue
+  `errorHandler` plus `window` `error`/`unhandledrejection` listeners catch
+  anything else (a bug in a component, an unawaited rejected promise) and
+  show a toast rather than leaving a blank or frozen screen with no
+  explanation.
+- **Scheduler**: a scheduled post that fails always leaves a visible `failed`
+  row in the Queue with the error message — previously, a schedule that
+  picked a random file (queue empty) and then failed to post had nowhere to
+  record that, and only ever showed up in the server console.
+
+If something goes wrong, the error code shown to you is the fastest way to
+find the relevant log line.
+
 ## Tech stack
 
 - **Frontend**: Vue 3, Vite, Pinia, Tailwind CSS, Chart.js

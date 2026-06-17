@@ -2,18 +2,19 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs-extra');
 const { getDb } = require('../database');
+const { asyncRoute } = require('../utils/appError');
 
 const router = express.Router();
 
 // GET /presets
-router.get('/', (req, res) => {
+router.get('/', asyncRoute((req, res) => {
   const db = getDb();
   const presets = db.prepare('SELECT * FROM folder_presets ORDER BY name ASC').all();
   res.json(presets);
-});
+}));
 
 // POST /presets
-router.post('/', async (req, res) => {
+router.post('/', asyncRoute(async (req, res) => {
   const { name, path: folderPath } = req.body;
   if (!name || !folderPath) {
     return res.status(400).json({ error: 'name and path are required' });
@@ -30,10 +31,10 @@ router.post('/', async (req, res) => {
   const result = db.prepare('INSERT INTO folder_presets (name, path) VALUES (?, ?)').run(name.trim(), folderPath);
   const preset = db.prepare('SELECT * FROM folder_presets WHERE id = ?').get(result.lastInsertRowid);
   res.status(201).json(preset);
-});
+}));
 
 // PUT /presets/:id
-router.put('/:id', async (req, res) => {
+router.put('/:id', asyncRoute(async (req, res) => {
   const { name, path: folderPath } = req.body;
   const db = getDb();
   const existing = db.prepare('SELECT * FROM folder_presets WHERE id = ?').get(req.params.id);
@@ -50,19 +51,19 @@ router.put('/:id', async (req, res) => {
   db.prepare('UPDATE folder_presets SET name = ?, path = ? WHERE id = ?').run(newName, newPath, req.params.id);
   const updated = db.prepare('SELECT * FROM folder_presets WHERE id = ?').get(req.params.id);
   res.json(updated);
-});
+}));
 
 // DELETE /presets/:id
-router.delete('/:id', (req, res) => {
+router.delete('/:id', asyncRoute((req, res) => {
   const db = getDb();
   const existing = db.prepare('SELECT * FROM folder_presets WHERE id = ?').get(req.params.id);
   if (!existing) return res.status(404).json({ error: 'Preset not found' });
   db.prepare('DELETE FROM folder_presets WHERE id = ?').run(req.params.id);
   res.json({ success: true });
-});
+}));
 
 // POST /presets/send — copy files to a preset destination
-router.post('/send', async (req, res) => {
+router.post('/send', asyncRoute(async (req, res) => {
   const { filePaths, presetId } = req.body;
   if (!Array.isArray(filePaths) || filePaths.length === 0 || !presetId) {
     return res.status(400).json({ error: 'filePaths and presetId are required' });
@@ -110,6 +111,6 @@ router.post('/send', async (req, res) => {
   }
 
   res.json({ copied: results.filter(r => r.success).length, results });
-});
+}));
 
 module.exports = router;

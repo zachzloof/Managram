@@ -1,6 +1,7 @@
 const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const { getDb } = require('../database');
+const { sendError, asyncRoute } = require('../utils/appError');
 
 const router = express.Router();
 
@@ -54,7 +55,7 @@ function getNextFireTime(time, days) {
 }
 
 // GET /schedule — list all schedules
-router.get('/', (req, res) => {
+router.get('/', asyncRoute((req, res) => {
   try {
     const db = getDb();
     const schedules = db
@@ -79,12 +80,12 @@ router.get('/', (req, res) => {
 
     res.json({ schedules: schedulesWithNextFire });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err, 'GET /schedule');
   }
-});
+}));
 
 // POST /schedule — create schedule
-router.post('/', (req, res) => {
+router.post('/', asyncRoute((req, res) => {
   const { name, time, days, captionTemplate } = req.body;
 
   if (!name || !time) {
@@ -125,12 +126,12 @@ router.post('/', (req, res) => {
       },
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err, 'POST /schedule');
   }
-});
+}));
 
 // PUT /schedule/:id — update schedule
-router.put('/:id', (req, res) => {
+router.put('/:id', asyncRoute((req, res) => {
   const { name, time, days, captionTemplate, active } = req.body;
   const { id } = req.params;
 
@@ -174,12 +175,12 @@ router.put('/:id', (req, res) => {
       },
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err, 'PUT /schedule/:id');
   }
-});
+}));
 
 // DELETE /schedule/:id — delete schedule
-router.delete('/:id', (req, res) => {
+router.delete('/:id', asyncRoute((req, res) => {
   try {
     const db = getDb();
     const { id } = req.params;
@@ -192,12 +193,12 @@ router.delete('/:id', (req, res) => {
     db.prepare('DELETE FROM schedules WHERE id = ?').run(id);
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err, 'DELETE /schedule/:id');
   }
-});
+}));
 
 // PATCH /schedule/:id/toggle — toggle active state
-router.patch('/:id/toggle', (req, res) => {
+router.patch('/:id/toggle', asyncRoute((req, res) => {
   try {
     const db = getDb();
     const { id } = req.params;
@@ -227,8 +228,8 @@ router.patch('/:id/toggle', (req, res) => {
       },
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err, 'PATCH /schedule/:id/toggle');
   }
-});
+}));
 
 module.exports = router;

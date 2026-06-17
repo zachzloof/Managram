@@ -5,6 +5,7 @@ const { getSetting } = require('../database');
 const instagramService = require('../services/instagram');
 const mediaIdentity = require('../services/mediaIdentity');
 const { buildMediaUrl } = require('../utils/mediaUrl');
+const { generateErrorCode, asyncRoute } = require('../utils/appError');
 
 const router = express.Router();
 
@@ -19,7 +20,7 @@ const LIMITS = {
 }
 
 // POST /posts/preflight — check a file before attempting to post
-router.post('/preflight', (req, res) => {
+router.post('/preflight', asyncRoute((req, res) => {
   const { mediaPath, postType } = req.body // postType: 'FEED' | 'REELS'
 
   if (!mediaPath) return res.status(400).json({ error: 'mediaPath required' })
@@ -80,7 +81,7 @@ router.post('/preflight', (req, res) => {
     errors,
     warnings,
   })
-})
+}))
 
 function getMediaType(filePath) {
   const ext = path.extname(filePath).toLowerCase();
@@ -90,7 +91,7 @@ function getMediaType(filePath) {
 
 
 // POST /posts/publish — immediately publish a post
-router.post('/publish', async (req, res) => {
+router.post('/publish', asyncRoute(async (req, res) => {
   const { mediaPath, caption, metadata = {} } = req.body;
 
   if (!mediaPath) {
@@ -137,14 +138,15 @@ router.post('/publish', async (req, res) => {
 
     res.json({ success: true, postId, message: 'Post published successfully' });
   } catch (err) {
+    const code = generateErrorCode();
     const igError = err.response?.data?.error;
-    console.error('[Posts] Publish error:', igError || err.message);
-    res.status(500).json({ error: igError?.message || err.message || 'Failed to publish post', fileUrl });
+    console.error(`[${code}] [Posts] Publish error:`, igError || err.message);
+    res.status(500).json({ error: igError?.message || err.message || 'Failed to publish post', fileUrl, code });
   }
-});
+}));
 
 // GET /posts/recent — fetch recent posts from Instagram
-router.get('/recent', async (req, res) => {
+router.get('/recent', asyncRoute(async (req, res) => {
   const accessToken = getSetting('instagram_access_token');
   const userId = getSetting('instagram_user_id');
 
@@ -158,15 +160,16 @@ router.get('/recent', async (req, res) => {
 
     res.json({ posts });
   } catch (err) {
-    console.error('[Posts] Error fetching recent posts:', err.response?.data || err.message);
+    const code = generateErrorCode();
+    console.error(`[${code}] [Posts] Error fetching recent posts:`, err.response?.data || err.message);
     const errorMsg =
       err.response?.data?.error?.message || err.message || 'Failed to fetch recent posts';
-    res.status(500).json({ error: errorMsg });
+    res.status(500).json({ error: errorMsg, code });
   }
-});
+}));
 
 // GET /posts/account — get account info with stats
-router.get('/account', async (req, res) => {
+router.get('/account', asyncRoute(async (req, res) => {
   const accessToken = getSetting('instagram_access_token');
   const userId = getSetting('instagram_user_id');
 
@@ -178,11 +181,12 @@ router.get('/account', async (req, res) => {
     const accountInfo = await instagramService.getAccountInfo(accessToken);
     res.json({ account: accountInfo });
   } catch (err) {
-    console.error('[Posts] Error fetching account info:', err.response?.data || err.message);
+    const code = generateErrorCode();
+    console.error(`[${code}] [Posts] Error fetching account info:`, err.response?.data || err.message);
     const errorMsg =
       err.response?.data?.error?.message || err.message || 'Failed to fetch account info';
-    res.status(500).json({ error: errorMsg });
+    res.status(500).json({ error: errorMsg, code });
   }
-});
+}));
 
 module.exports = router;

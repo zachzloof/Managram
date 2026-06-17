@@ -1,11 +1,12 @@
 const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const { getDb } = require('../database');
+const { sendError, asyncRoute } = require('../utils/appError');
 
 const router = express.Router();
 
 // GET /queue — list all queue items
-router.get('/', (req, res) => {
+router.get('/', asyncRoute((req, res) => {
   try {
     const db = getDb();
     const items = db
@@ -23,12 +24,12 @@ router.get('/', (req, res) => {
 
     res.json({ items });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err, 'GET /queue');
   }
-});
+}));
 
 // POST /queue — add item to queue
-router.post('/', (req, res) => {
+router.post('/', asyncRoute((req, res) => {
   const { mediaPath, caption, scheduledAt, mediaType } = req.body;
 
   if (!mediaPath) {
@@ -50,12 +51,12 @@ router.post('/', (req, res) => {
     const item = db.prepare('SELECT * FROM queue WHERE id = ?').get(id);
     res.status(201).json({ item });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err, 'POST /queue');
   }
-});
+}));
 
 // DELETE /queue/:id — remove from queue
-router.delete('/:id', (req, res) => {
+router.delete('/:id', asyncRoute((req, res) => {
   try {
     const db = getDb();
     const { id } = req.params;
@@ -68,12 +69,12 @@ router.delete('/:id', (req, res) => {
     db.prepare('DELETE FROM queue WHERE id = ?').run(id);
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err, 'DELETE /queue/:id');
   }
-});
+}));
 
 // PATCH /queue/:id — update queue item
-router.patch('/:id', (req, res) => {
+router.patch('/:id', asyncRoute((req, res) => {
   const { caption, scheduledAt, status } = req.body;
   const { id } = req.params;
 
@@ -113,12 +114,12 @@ router.patch('/:id', (req, res) => {
     const updated = db.prepare('SELECT * FROM queue WHERE id = ?').get(id);
     res.json({ item: updated });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err, 'PATCH /queue/:id');
   }
-});
+}));
 
 // POST /queue/reorder — reorder queue items
-router.post('/reorder', (req, res) => {
+router.post('/reorder', asyncRoute((req, res) => {
   const { orderedIds } = req.body;
 
   if (!Array.isArray(orderedIds)) {
@@ -143,8 +144,8 @@ router.post('/reorder', (req, res) => {
     reorderMany(orderedIds);
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err, 'POST /queue/reorder');
   }
-});
+}));
 
 module.exports = router;

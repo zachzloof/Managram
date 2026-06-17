@@ -3,6 +3,7 @@ const Stripe = require('stripe');
 const { isHostedMode } = require('../services/appMode');
 const { requireAccount } = require('../middleware/requireAccount');
 const accountsRepo = require('../repositories/accountsRepo');
+const { generateErrorCode, sendError, asyncRoute } = require('../utils/appError');
 
 const router = express.Router();
 
@@ -22,7 +23,7 @@ function getAppUrl() {
 
 // POST /billing/checkout — start (or resume) a subscription. Card required
 // up front, 7-day trial, auto-converts unless canceled.
-router.post('/checkout', hostedOnly, requireAccount, async (req, res) => {
+router.post('/checkout', hostedOnly, requireAccount, asyncRoute(async (req, res) => {
   try {
     const stripe = getStripe();
     let account = await accountsRepo.getAccountById(req.accountId);
@@ -49,13 +50,12 @@ router.post('/checkout', hostedOnly, requireAccount, async (req, res) => {
 
     res.json({ url: session.url });
   } catch (err) {
-    console.error('[Billing] checkout error:', err.message);
-    res.status(500).json({ error: err.message });
+    sendError(res, err, 'POST /billing/checkout');
   }
-});
+}));
 
 // GET /billing/portal — Stripe Customer Portal for self-serve plan/cancel management
-router.get('/portal', hostedOnly, requireAccount, async (req, res) => {
+router.get('/portal', hostedOnly, requireAccount, asyncRoute(async (req, res) => {
   try {
     const stripe = getStripe();
     const account = await accountsRepo.getAccountById(req.accountId);
@@ -67,10 +67,9 @@ router.get('/portal', hostedOnly, requireAccount, async (req, res) => {
     });
     res.json({ url: session.url });
   } catch (err) {
-    console.error('[Billing] portal error:', err.message);
-    res.status(500).json({ error: err.message });
+    sendError(res, err, 'GET /billing/portal');
   }
-});
+}));
 
 // Stripe webhook handler — mounted directly on `app` in index.js (not on
 // this router) at /billing/webhook, with express.raw() ahead of the global
@@ -83,8 +82,9 @@ async function webhookHandler(req, res) {
   try {
     event = stripe.webhooks.constructEvent(req.body, req.headers['stripe-signature'], process.env.STRIPE_WEBHOOK_SECRET);
   } catch (err) {
-    console.error('[Billing] webhook signature verification failed:', err.message);
-    return res.status(400).json({ error: 'Invalid signature' });
+    const code = generateErrorCode();
+    console.error(`[${code}] [Billing] webhook signature verification failed:`, err.message);
+    return res.status(400).json({ error: 'Invalid signature', code });
   }
 
   // Respond fast; Stripe retries on slow/ambiguous responses.
@@ -116,7 +116,8 @@ async function webhookHandler(req, res) {
       }
     }
   } catch (err) {
-    console.error('[Billing] webhook handling error:', err.message);
+    const code = generateErrorCode();
+    console.error(`[${code}] [Billing] webhook handling error:`, err.stack || err.message);
   }
 }
 

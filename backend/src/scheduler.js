@@ -7,6 +7,7 @@ const instagramService = require('./services/instagram');
 const openaiService = require('./services/openai');
 const mediaIdentity = require('./services/mediaIdentity');
 const { buildMediaUrl } = require('./utils/mediaUrl');
+const { generateErrorCode } = require('./utils/appError');
 
 // TODO(Part 5): replace with the real per-tenant account id once accounts land.
 const ACCOUNT_ID = 'local';
@@ -162,9 +163,10 @@ async function checkScheduledQueueItems(db) {
       db.prepare("UPDATE queue SET status = 'posted', posted_at = datetime('now') WHERE id = ?").run(item.id);
       console.log(`[Scheduler] Posted scheduled item ${item.id}, Instagram post ID: ${postId}`);
     } catch (err) {
-      console.error(`[Scheduler] Error posting scheduled item ${item.id}:`, err.message);
+      const code = generateErrorCode();
+      console.error(`[${code}] [Scheduler] Error posting scheduled item ${item.id}:`, err.message);
       db.prepare("UPDATE queue SET status = 'failed', error_message = ? WHERE id = ?")
-        .run(err.message, item.id);
+        .run(`${err.message} (${code})`, item.id);
     }
   }
 }
@@ -201,6 +203,12 @@ async function checkAndFireSchedules(db) {
         .get();
 
       let mediaPath, caption;
+      // Tracks the queue row standing in for *this* firing, so a failure
+      // always has somewhere visible to land — previously, the "no queue
+      // item, picked a random file" path created no row at all until
+      // success, so a failure here was logged to the console and nowhere
+      // else; the user would never know the schedule had silently failed.
+      let trackingId = queueItem?.id;
 
       if (queueItem) {
         mediaPath = queueItem.media_path;
@@ -239,39 +247,34 @@ async function checkAndFireSchedules(db) {
         } else {
           caption = template;
         }
+
+        // Create the visible queue row up front (status 'posting'), before
+        // attempting to post, so a failure below has a row to mark 'failed'
+        // on — same as the queueItem branch already gets for free.
+        trackingId = uuidv4();
+        db.prepare(
+          `INSERT INTO queue (id, media_path, media_type, caption, status, created_at)
+           VALUES (?, ?, ?, ?, 'posting', datetime('now'))`
+        ).run(trackingId, mediaPath, getMediaType(mediaPath), caption);
       }
 
       // Post the media
       const postId = await postMedia(db, mediaPath, caption);
 
-      if (queueItem) {
-        // Update queue item to posted
-        db.prepare(
-          "UPDATE queue SET status = 'posted', posted_at = datetime('now') WHERE id = ?"
-        ).run(queueItem.id);
-        console.log(`[Scheduler] Posted queue item ${queueItem.id}, Instagram post ID: ${postId}`);
-      } else {
-        // Add a record to queue as posted
-        db.prepare(
-          `INSERT INTO queue (id, media_path, media_type, caption, status, posted_at, created_at)
-           VALUES (?, ?, ?, ?, 'posted', datetime('now'), datetime('now'))`
-        ).run(
-          uuidv4(),
-          mediaPath,
-          getMediaType(mediaPath),
-          caption
-        );
-        console.log(`[Scheduler] Posted random media, Instagram post ID: ${postId}`);
-      }
+      db.prepare(
+        "UPDATE queue SET status = 'posted', posted_at = datetime('now') WHERE id = ?"
+      ).run(trackingId);
+      console.log(`[Scheduler] Posted for schedule "${schedule.name}", Instagram post ID: ${postId}`);
     } catch (err) {
-      console.error(`[Scheduler] Error posting for schedule ${schedule.name}:`, err.message);
+      const code = generateErrorCode();
+      console.error(`[${code}] [Scheduler] Error posting for schedule ${schedule.name}:`, err.message);
 
       const failedItem = db
         .prepare("SELECT id FROM queue WHERE status = 'posting' LIMIT 1")
         .get();
       if (failedItem) {
         db.prepare("UPDATE queue SET status = 'failed', error_message = ? WHERE id = ?")
-          .run(err.message, failedItem.id);
+          .run(`${err.message} (${code})`, failedItem.id);
       }
     }
   }
@@ -291,7 +294,8 @@ function startScheduler(db) {
       await checkScheduledQueueItems(db);
       await checkAndFireSchedules(db);
     } catch (err) {
-      console.error('[Scheduler] Unexpected error:', err.message);
+      const code = generateErrorCode();
+      console.error(`[${code}] [Scheduler] Unexpected error:`, err.stack || err.message);
     }
   });
 
@@ -300,7 +304,8 @@ function startScheduler(db) {
     try {
       await pollMetrics(db);
     } catch (err) {
-      console.error('[Scheduler] Metrics poll error:', err.message);
+      const code = generateErrorCode();
+      console.error(`[${code}] [Scheduler] Metrics poll error:`, err.stack || err.message);
     }
   });
 }

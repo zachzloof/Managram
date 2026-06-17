@@ -3,6 +3,7 @@ const { isHostedMode } = require('../services/appMode');
 const { hashPassword, verifyPassword, issueToken } = require('../services/auth');
 const accountsRepo = require('../repositories/accountsRepo');
 const { requireAccount } = require('../middleware/requireAccount');
+const { asyncRoute } = require('../utils/appError');
 
 const router = express.Router();
 
@@ -19,7 +20,7 @@ const COOKIE_OPTS = {
 };
 
 // POST /account/signup — { email, password }
-router.post('/signup', hostedOnly, async (req, res) => {
+router.post('/signup', hostedOnly, asyncRoute(async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password || password.length < 8) {
     return res.status(400).json({ error: 'A valid email and an 8+ character password are required' });
@@ -35,13 +36,13 @@ router.post('/signup', hostedOnly, async (req, res) => {
   const token = issueToken(account, 'session');
   res.cookie('managram_session', token, COOKIE_OPTS);
   res.json({ account: { id: account.id, email: account.email, status: account.subscription_status } });
-});
+}));
 
 // POST /account/login — { email, password } — used by both the hosted web app
 // and the Electron client (Electron calls this over HTTPS against the
 // hosted server, then caches the returned token locally — see
 // electron/license-manager.js).
-router.post('/login', hostedOnly, async (req, res) => {
+router.post('/login', hostedOnly, asyncRoute(async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'email and password are required' });
 
@@ -58,25 +59,25 @@ router.post('/login', hostedOnly, async (req, res) => {
     token,
     account: { id: account.id, email: account.email, status: account.subscription_status, isAdmin: account.is_admin },
   });
-});
+}));
 
 // GET /account/me
-router.get('/me', hostedOnly, requireAccount, async (req, res) => {
+router.get('/me', hostedOnly, requireAccount, asyncRoute(async (req, res) => {
   const account = await accountsRepo.getAccountById(req.accountId);
   if (!account) return res.status(404).json({ error: 'Account not found' });
   res.json({ account: { id: account.id, email: account.email, status: account.subscription_status, isAdmin: account.is_admin } });
-});
+}));
 
 // POST /account/refresh — re-issue a token with fresh status/override claims;
 // Electron calls this opportunistically every few hours while online.
-router.post('/refresh', hostedOnly, requireAccount, async (req, res) => {
+router.post('/refresh', hostedOnly, requireAccount, asyncRoute(async (req, res) => {
   const account = await accountsRepo.getAccountById(req.accountId);
   if (!account) return res.status(404).json({ error: 'Account not found' });
   const wantsLicense = req.body.client === 'electron';
   const token = issueToken(account, wantsLicense ? 'license' : 'session');
   if (!wantsLicense) res.cookie('managram_session', token, COOKIE_OPTS);
   res.json({ token, status: account.subscription_status });
-});
+}));
 
 // POST /account/logout
 router.post('/logout', hostedOnly, (req, res) => {

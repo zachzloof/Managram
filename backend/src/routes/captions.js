@@ -1,11 +1,12 @@
 const express = require('express');
 const { getSetting } = require('../database');
 const { generateCaptions } = require('../services/openai');
+const { sendError, asyncRoute } = require('../utils/appError');
 
 const router = express.Router();
 
 // POST /captions/generate — generate 3 caption options using OpenAI
-router.post('/generate', async (req, res) => {
+router.post('/generate', asyncRoute(async (req, res) => {
   const { mediaType, context, style, hashtagCount, language } = req.body;
 
   const openaiKey = getSetting('openai_api_key');
@@ -28,11 +29,8 @@ router.post('/generate', async (req, res) => {
 
     res.json({ captions });
   } catch (err) {
-    console.error('[Captions] Generation error:', err.message);
-    res.status(500).json({
-      error: err.message || 'Failed to generate captions',
-    });
+    sendError(res, err, 'POST /captions/generate');
   }
-});
+}));
 
 module.exports = router;

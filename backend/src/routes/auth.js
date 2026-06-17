@@ -1,6 +1,7 @@
 const express = require('express');
 const axios = require('axios');
 const { getSetting, setSetting } = require('../database');
+const { generateErrorCode, sendError, asyncRoute } = require('../utils/appError');
 
 const router = express.Router();
 
@@ -24,7 +25,7 @@ function getRedirectUri() {
 }
 
 // GET /auth/instagram — initiate OAuth flow
-router.get('/instagram', (req, res) => {
+router.get('/instagram', asyncRoute((req, res) => {
   const appId = getSetting('app_id');
 
   if (!appId) {
@@ -47,10 +48,10 @@ router.get('/instagram', (req, res) => {
     `&response_type=code`;
 
   res.redirect(authUrl);
-});
+}));
 
 // GET /auth/callback — exchange code for token
-router.get('/callback', async (req, res) => {
+router.get('/callback', asyncRoute(async (req, res) => {
   const { code, error, error_description } = req.query;
 
   if (error) {
@@ -119,18 +120,19 @@ router.get('/callback', async (req, res) => {
 
     res.redirect(`${getBaseUrl()}?auth=success`);
   } catch (err) {
-    console.error('[Auth] OAuth error:', err.response?.data || err.message);
+    const code = generateErrorCode();
+    console.error(`[${code}] [Auth] OAuth error:`, err.response?.data || err.message);
     const errorMsg =
       err.response?.data?.error_message ||
       err.response?.data?.error?.message ||
       err.message ||
       'Authentication failed';
-    res.redirect(`${getBaseUrl()}?error=${encodeURIComponent(errorMsg)}`);
+    res.redirect(`${getBaseUrl()}?error=${encodeURIComponent(`${errorMsg} (${code})`)}`);
   }
-});
+}));
 
 // POST /auth/token — manually paste a token generated from the Meta portal
-router.post('/token', async (req, res) => {
+router.post('/token', asyncRoute(async (req, res) => {
   const { access_token } = req.body;
   if (!access_token) return res.status(400).json({ error: 'access_token required' });
 
@@ -181,15 +183,16 @@ router.post('/token', async (req, res) => {
       },
     });
   } catch (err) {
-    console.error('[Auth] Token error:', err.response?.data || err.message);
+    const code = generateErrorCode();
+    console.error(`[${code}] [Auth] Token error:`, err.response?.data || err.message);
     const errorMsg =
       err.response?.data?.error?.message ||
       err.response?.data?.error_message ||
       err.message ||
       'Invalid token';
-    res.status(400).json({ error: errorMsg });
+    res.status(400).json({ error: errorMsg, code });
   }
-});
+}));
 
 // GET /auth/status
 router.get('/status', (req, res) => {

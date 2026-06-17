@@ -10,6 +10,7 @@ const { startScheduler } = require('./scheduler');
 const { isR2Mode } = require('./services/r2');
 const { isHostedMode } = require('./services/appMode');
 const localLicenseGate = require('./services/localLicenseGate');
+const { generateErrorCode } = require('./utils/appError');
 
 const authRoutes = require('./routes/auth');
 const mediaRoutes = require('./routes/media');
@@ -95,12 +96,50 @@ if (fs.existsSync(frontendDist)) {
   });
 }
 
-// Global error handler
+// Global error handler — the safety net for anything an individual route
+// didn't (or couldn't) catch itself. Every response includes a short code
+// that's also written to the server log, so a user-reported code can be
+// grepped for directly instead of guessing which request failed.
 app.use((err, req, res, next) => {
-  console.error('[Error]', err.stack);
-  res.status(500).json({
+  const code = generateErrorCode();
+  console.error(`[${code}] ${req.method} ${req.path}:`, err.stack || err.message || err);
+  if (res.headersSent) return next(err);
+  res.status(err.status || 500).json({
     error: err.message || 'Internal server error',
+    code,
   });
+});
+
+// Last-resort safety nets — log clearly with a code instead of the process
+// dying silently or an Electron window just freezing with no explanation.
+// This file runs both standalone (Railway) and embedded inside Electron's
+// main process (same Node process — electron/main.js requires it directly),
+// so the two need different responses to a truly uncaught exception:
+// Node's own guidance is to exit after logging rather than keep limping
+// along in an unknown state, which is correct for a standalone server (a
+// process manager restarts it) — but abruptly exiting the *entire desktop
+// app* with no explanation is worse than staying up in a possibly-degraded
+// state with the error at least visible. The renderer is notified so the
+// running Electron app can show something instead of just going quiet.
+process.on('uncaughtException', (err) => {
+  const code = generateErrorCode();
+  console.error(`[${code}] Uncaught exception:`, err.stack || err.message || err);
+  if (process.versions.electron) {
+    try {
+      require('electron').BrowserWindow.getAllWindows().forEach((w) => {
+        w.webContents.send('backend-error', { message: err.message, code });
+      });
+    } catch {
+      // best effort — if this itself fails, fall through to exiting below
+    }
+    return;
+  }
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason) => {
+  const code = generateErrorCode();
+  console.error(`[${code}] Unhandled promise rejection:`, reason?.stack || reason);
 });
 
 let serverStarted = false;

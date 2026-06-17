@@ -9,6 +9,7 @@ const {
   getMetricsHistoryForPost,
   getTagsForContentIds,
 } = require('../database');
+const { asyncRoute } = require('../utils/appError');
 
 const router = express.Router();
 
@@ -21,7 +22,7 @@ const HOUR_LABELS = Array.from({ length: 24 }, (_, h) => {
 });
 
 // GET /analytics/overview
-router.get('/overview', (req, res) => {
+router.get('/overview', asyncRoute((req, res) => {
   const posts = getPostsWithLatestMetrics(ACCOUNT_ID, 200);
   const withMetrics = posts.filter((p) => p.like_count != null);
 
@@ -65,10 +66,10 @@ router.get('/overview', (req, res) => {
     followerGrowth,
     bestTimes,
   });
-});
+}));
 
 // GET /analytics/posts
-router.get('/posts', (req, res) => {
+router.get('/posts', asyncRoute((req, res) => {
   const limit = parseInt(req.query.limit) || 50;
   const posts = getPostsWithLatestMetrics(ACCOUNT_ID, limit);
   const contentIds = [...new Set(posts.map((p) => p.content_id).filter(Boolean))];
@@ -88,10 +89,10 @@ router.get('/posts', (req, res) => {
       tags: p.content_id ? tagsByContentId[p.content_id] || [] : [],
     })),
   });
-});
+}));
 
 // GET /analytics/content/:id — full repost history for one piece of content
-router.get('/content/:id', (req, res) => {
+router.get('/content/:id', asyncRoute((req, res) => {
   const contentId = req.params.id;
   const history = getPostHistoryForContentIds(ACCOUNT_ID, [contentId]);
   const metrics = getLatestMetrics(history.map((h) => h.id));
@@ -108,10 +109,10 @@ router.get('/content/:id', (req, res) => {
   }));
 
   res.json({ contentId, postCount: enriched.length, history: enriched });
-});
+}));
 
 // GET /analytics/tags — engagement aggregated by tag
-router.get('/tags', (req, res) => {
+router.get('/tags', asyncRoute((req, res) => {
   const tags = getTagPerformance(ACCOUNT_ID);
   res.json({
     tags: tags.map((t) => ({
@@ -123,6 +124,6 @@ router.get('/tags', (req, res) => {
       avgComments: t.avg_comments || 0,
     })),
   });
-});
+}));
 
 module.exports = router;

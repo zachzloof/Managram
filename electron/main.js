@@ -121,24 +121,55 @@ app.whenReady().then(async () => {
     // not open, while that network round-trip is in flight.
     require('../backend/src/services/localLicenseGate').setValid(false)
   }
-  await initBackend()
+
+  try {
+    await initBackend()
+  } catch (err) {
+    // The backend failed to even start (e.g. port already in use, a
+    // corrupted local database). Without this, the app would just sit with
+    // no window and no explanation — show something the user can actually
+    // act on or report, instead of a silent non-functional app.
+    console.error('[Electron] Backend failed to start:', err.stack || err.message)
+    dialog.showErrorBox(
+      'Managram failed to start',
+      `The app's backend could not start, so Managram can't run right now.\n\n${err.message}\n\nIf this keeps happening, check that no other copy of Managram is already running, and check the logs for more detail.`
+    )
+    app.quit()
+    return
+  }
+
   createWindow()
 
-  const status = await checkLicense()
-  mainWindow?.webContents.send('license-status', status)
+  try {
+    const status = await checkLicense()
+    mainWindow?.webContents.send('license-status', status)
+  } catch (err) {
+    // A failed license check (e.g. no network on first run) shouldn't be
+    // fatal — fall back to whatever the cached/default state already is
+    // and let the renderer's own gate UI explain what's going on.
+    console.warn('[Electron] License check failed:', err.message)
+  }
 
   initNgrok() // non-blocking — fires in background
 
   // Re-check opportunistically while running, so a revoke/lapse is caught
   // even if the app is left open for days.
   setInterval(async () => {
-    const result = await checkLicense()
-    mainWindow?.webContents.send('license-status', result)
+    try {
+      const result = await checkLicense()
+      mainWindow?.webContents.send('license-status', result)
+    } catch (err) {
+      console.warn('[Electron] Periodic license check failed:', err.message)
+    }
   }, 6 * 60 * 60 * 1000)
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
+}).catch((err) => {
+  console.error('[Electron] Fatal startup error:', err.stack || err.message)
+  dialog.showErrorBox('Managram failed to start', err.message || 'Unknown error — check the logs for detail.')
+  app.quit()
 })
 
 app.on('window-all-closed', () => {

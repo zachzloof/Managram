@@ -70,6 +70,7 @@ import AppSidebar from './components/AppSidebar.vue';
 import LoginView from './views/LoginView.vue';
 import LicenseGateView from './views/LicenseGateView.vue';
 import AccountLoginView from './views/AccountLoginView.vue';
+import { toasts, pushToast } from './utils/toast.js';
 
 const authStore = useAuthStore();
 const accountStore = useAccountStore();
@@ -80,17 +81,7 @@ const isElectron = !!window.electronAPI;
 const licenseValid = ref(false);
 const gatesChecked = ref(false);
 
-const toasts = ref([]);
-let toastId = 0;
-
-function showToast(message, type = 'info', duration = 4000) {
-  const id = ++toastId;
-  toasts.value.push({ id, message, type });
-  setTimeout(() => {
-    toasts.value = toasts.value.filter((t) => t.id !== id);
-  }, duration);
-}
-
+const showToast = pushToast;
 provide('showToast', showToast);
 
 onMounted(async () => {
@@ -99,6 +90,9 @@ onMounted(async () => {
     licenseValid.value = status?.state === 'valid';
     window.electronAPI.onLicenseStatus((s) => {
       licenseValid.value = s?.state === 'valid';
+    });
+    window.electronAPI.onBackendError((err) => {
+      showToast(`Something went wrong in the background (${err.code}). Restart Managram if things seem stuck.`, 'error', 10000);
     });
   } else {
     await accountStore.checkAccount();
