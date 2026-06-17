@@ -7,4 +7,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   restartNgrok: (authtoken) => ipcRenderer.invoke('restart-ngrok', authtoken),
   onNgrokUrl: (cb) => ipcRenderer.on('ngrok-url', (_, url) => cb(url)),
   onNgrokError: (cb) => ipcRenderer.on('ngrok-error', (_, msg) => cb(msg)),
+  getLicenseStatus: () => ipcRenderer.invoke('license-status'),
+  licenseLogin: (email, password) => ipcRenderer.invoke('license-login', { email, password }),
+  onLicenseStatus: (cb) => ipcRenderer.on('license-status', (_, status) => cb(status)),
 })

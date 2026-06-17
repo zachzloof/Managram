@@ -1,16 +1,26 @@
 <template>
   <div class="min-h-screen bg-gray-950 text-white">
-    <!-- Auth loading state -->
-    <div v-if="authStore.loading && !authStore.checked" class="flex items-center justify-center min-h-screen">
+    <!-- Loading state -->
+    <div v-if="!gatesChecked" class="flex items-center justify-center min-h-screen">
       <div class="flex flex-col items-center gap-4">
-        <div class="w-12 h-12 rounded-2xl bg-instagram-gradient flex items-center justify-center animate-pulse">
-          <span class="text-white text-xl font-bold">M</span>
+        <div class="w-12 h-12 rounded-xl bg-accent-500 flex items-center justify-center animate-pulse">
+          <span class="text-white text-xl font-bold font-data">M</span>
         </div>
         <div class="text-gray-400 text-sm">Loading Managram...</div>
       </div>
     </div>
 
-    <!-- Not authenticated — show login -->
+    <!-- Electron license gate — takes priority over everything else -->
+    <template v-else-if="isElectron && !licenseValid">
+      <LicenseGateView @unlocked="licenseValid = true" />
+    </template>
+
+    <!-- Hosted web: not logged in / lapsed subscription -->
+    <template v-else-if="accountStore.hostedMode && !accountStore.authenticated">
+      <AccountLoginView />
+    </template>
+
+    <!-- Not authenticated with Instagram — show connect screen -->
     <template v-else-if="!authStore.isAuthenticated">
       <LoginView />
     </template>
@@ -55,12 +65,20 @@ import { onMounted, ref, provide } from 'vue';
 import { RouterView, useRouter, useRoute } from 'vue-router';
 import { CheckCircleIcon, XCircleIcon, InformationCircleIcon } from '@heroicons/vue/24/solid';
 import { useAuthStore } from './stores/auth.js';
+import { useAccountStore } from './stores/account.js';
 import AppSidebar from './components/AppSidebar.vue';
 import LoginView from './views/LoginView.vue';
+import LicenseGateView from './views/LicenseGateView.vue';
+import AccountLoginView from './views/AccountLoginView.vue';
 
 const authStore = useAuthStore();
+const accountStore = useAccountStore();
 const router = useRouter();
 const route = useRoute();
+
+const isElectron = !!window.electronAPI;
+const licenseValid = ref(false);
+const gatesChecked = ref(false);
 
 const toasts = ref([]);
 let toastId = 0;
@@ -76,6 +94,17 @@ function showToast(message, type = 'info', duration = 4000) {
 provide('showToast', showToast);
 
 onMounted(async () => {
+  if (isElectron) {
+    const status = await window.electronAPI.getLicenseStatus();
+    licenseValid.value = status?.state === 'valid';
+    window.electronAPI.onLicenseStatus((s) => {
+      licenseValid.value = s?.state === 'valid';
+    });
+  } else {
+    await accountStore.checkAccount();
+  }
+  gatesChecked.value = true;
+
   await authStore.checkAuth();
 
   // Handle OAuth callback parameters

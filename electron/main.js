@@ -1,7 +1,9 @@
 const { app, BrowserWindow, shell, ipcMain, dialog } = require('electron')
 const path = require('path')
+const licenseManager = require('./license-manager')
 
 const isDev = process.env.NODE_ENV === 'development'
+const SKIP_LICENSE = process.env.MANAGRAM_SKIP_LICENSE === 'true'
 
 let mainWindow = null
 
@@ -13,6 +15,17 @@ async function initBackend() {
   const { startServer } = require('../backend/src/index')
   await startServer()
   console.log('[Electron] Backend started on port 3001')
+}
+
+// Good-faith access gate (see electron/license-manager.js) — not run at all
+// in dev with MANAGRAM_SKIP_LICENSE=true, so local development doesn't
+// require a live license server.
+async function checkLicense() {
+  if (SKIP_LICENSE) return { state: 'valid' }
+  const localLicenseGate = require('../backend/src/services/localLicenseGate')
+  const result = await licenseManager.refresh()
+  localLicenseGate.setValid(result.state === 'valid')
+  return result
 }
 
 async function initNgrok() {
@@ -86,10 +99,43 @@ ipcMain.handle('restart-ngrok', async (_, authtoken) => {
   return status
 })
 
+// IPC: license gate — renderer asks for current status, and drives login
+ipcMain.handle('license-status', async () => {
+  if (SKIP_LICENSE) return { state: 'valid' }
+  return licenseManager.getStatus()
+})
+
+ipcMain.handle('license-login', async (_, { email, password }) => {
+  try {
+    const result = await licenseManager.login(email, password)
+    require('../backend/src/services/localLicenseGate').setValid(result.state === 'valid')
+    return result
+  } catch (err) {
+    return { state: 'error', error: err.message }
+  }
+})
+
 app.whenReady().then(async () => {
+  if (!SKIP_LICENSE) {
+    // Deny by default until the very first check resolves — fail closed,
+    // not open, while that network round-trip is in flight.
+    require('../backend/src/services/localLicenseGate').setValid(false)
+  }
   await initBackend()
   createWindow()
+
+  const status = await checkLicense()
+  mainWindow?.webContents.send('license-status', status)
+
   initNgrok() // non-blocking — fires in background
+
+  // Re-check opportunistically while running, so a revoke/lapse is caught
+  // even if the app is left open for days.
+  setInterval(async () => {
+    const result = await checkLicense()
+    mainWindow?.webContents.send('license-status', result)
+  }, 6 * 60 * 60 * 1000)
+
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })

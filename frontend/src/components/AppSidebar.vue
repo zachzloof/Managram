@@ -3,12 +3,12 @@
     <!-- Logo -->
     <div class="p-5 border-b border-white/5">
       <div class="flex items-center gap-3">
-        <div class="w-9 h-9 rounded-xl bg-instagram-gradient flex items-center justify-center shadow-glow-pink shrink-0">
-          <span class="text-white text-base font-bold">M</span>
+        <div class="w-9 h-9 rounded-lg bg-accent-500 flex items-center justify-center shrink-0">
+          <span class="text-white text-base font-bold font-data">M</span>
         </div>
         <div>
-          <h1 class="text-white font-bold text-base leading-none">Managram</h1>
-          <p class="text-gray-500 text-xs mt-0.5">Instagram Manager</p>
+          <h1 class="text-white font-bold text-base leading-none tracking-tight">Managram</h1>
+          <p class="text-gray-500 text-xs mt-0.5">Content Manager</p>
         </div>
       </div>
     </div>
@@ -23,17 +23,17 @@
         :class="{ active: isActive(item.to) }"
       >
         <div
-          class="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-all duration-200"
+          class="w-8 h-8 rounded-md flex items-center justify-center shrink-0 transition-all duration-150"
           :class="isActive(item.to)
-            ? 'bg-instagram-gradient shadow-glow-pink'
-            : 'bg-white/5 group-hover:bg-white/10'"
+            ? 'bg-accent-500 text-white'
+            : 'bg-white/[0.04] group-hover:bg-white/[0.08]'"
         >
           <component :is="item.icon" class="w-4 h-4" />
         </div>
         <span>{{ item.label }}</span>
         <span
           v-if="item.badge"
-          class="ml-auto text-xs px-1.5 py-0.5 rounded-full bg-pink-500/20 text-pink-400 border border-pink-500/30"
+          class="ml-auto text-xs px-1.5 py-0.5 rounded-md bg-accent-500/15 text-accent-400 border border-accent-500/25 font-data"
         >
           {{ item.badge }}
         </span>
@@ -44,7 +44,7 @@
     <div class="p-3 border-t border-white/5">
       <div class="flex items-center gap-3 px-2 py-2">
         <!-- Avatar -->
-        <div class="w-8 h-8 rounded-full overflow-hidden shrink-0 bg-instagram-gradient flex items-center justify-center">
+        <div class="w-8 h-8 rounded-full overflow-hidden shrink-0 bg-accent-500 flex items-center justify-center">
           <img
             v-if="authStore.user?.profilePicture"
             :src="authStore.user.profilePicture"
@@ -82,14 +82,18 @@ import {
   PhotoIcon,
   QueueListIcon,
   CalendarDaysIcon,
+  ChartBarIcon,
   CogIcon,
+  ShieldCheckIcon,
   ArrowRightOnRectangleIcon,
 } from '@heroicons/vue/24/outline';
 import { useAuthStore } from '../stores/auth.js';
 import { useQueueStore } from '../stores/queue.js';
+import { useAccountStore } from '../stores/account.js';
 
 const authStore = useAuthStore();
 const queueStore = useQueueStore();
+const accountStore = useAccountStore();
 const route = useRoute();
 const router = useRouter();
 
@@ -114,7 +118,9 @@ const navItems = computed(() => [
     badge: queueStore.pendingCount > 0 ? queueStore.pendingCount : null,
   },
   { to: '/schedule', label: 'Schedule', icon: CalendarDaysIcon },
+  { to: '/analytics', label: 'Analytics', icon: ChartBarIcon },
   { to: '/settings', label: 'Settings', icon: CogIcon },
+  ...(accountStore.account?.isAdmin ? [{ to: '/admin', label: 'Admin', icon: ShieldCheckIcon }] : []),
 ]);
 
 async function handleLogout() {

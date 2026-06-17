@@ -6,10 +6,34 @@
       <p class="text-gray-400 text-sm mt-0.5">Configure your Managram instance</p>
     </div>
 
+    <!-- Billing (hosted mode only) -->
+    <div v-if="accountStore.hostedMode" class="card">
+      <div class="flex items-center gap-3 mb-4">
+        <div class="w-8 h-8 rounded-lg bg-accent-500/15 flex items-center justify-center">
+          <CreditCardIcon class="w-4 h-4 text-accent-400" />
+        </div>
+        <h2 class="text-base font-semibold text-white">Billing</h2>
+      </div>
+      <div class="flex items-center justify-between">
+        <div>
+          <p class="text-white text-sm">Status: <span class="capitalize">{{ accountStore.account?.status || '—' }}</span></p>
+          <p class="text-gray-500 text-xs mt-0.5">{{ accountStore.account?.email }}</p>
+        </div>
+        <div class="flex gap-2">
+          <button v-if="accountStore.account?.status === 'trialing' || !accountStore.account?.status" @click="startCheckout" :disabled="billingLoading" class="btn-primary">
+            Subscribe
+          </button>
+          <button v-else @click="openPortal" :disabled="billingLoading" class="btn-secondary">
+            Manage Subscription
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- Instagram Connection -->
     <div class="card">
       <div class="flex items-center gap-3 mb-4">
-        <div class="w-8 h-8 rounded-lg bg-instagram-gradient flex items-center justify-center">
+        <div class="w-8 h-8 rounded-lg bg-accent-500 flex items-center justify-center">
           <svg viewBox="0 0 24 24" class="w-4 h-4 fill-white">
             <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
           </svg>
@@ -18,7 +42,7 @@
       </div>
 
       <div v-if="authStore.isAuthenticated && authStore.user" class="flex items-center gap-4">
-        <div class="w-12 h-12 rounded-full overflow-hidden bg-instagram-gradient flex items-center justify-center">
+        <div class="w-12 h-12 rounded-full overflow-hidden bg-accent-500 flex items-center justify-center">
           <img
             v-if="authStore.user.profilePicture"
             :src="authStore.user.profilePicture"
@@ -51,8 +75,8 @@
     <!-- Content Folder -->
     <div class="card">
       <div class="flex items-center gap-3 mb-4">
-        <div class="w-8 h-8 rounded-lg bg-orange-500/20 flex items-center justify-center">
-          <FolderIcon class="w-4 h-4 text-orange-400" />
+        <div class="w-8 h-8 rounded-lg bg-accent-500/15 flex items-center justify-center">
+          <FolderIcon class="w-4 h-4 text-accent-400" />
         </div>
         <h2 class="text-base font-semibold text-white">Content Folder</h2>
       </div>
@@ -102,7 +126,7 @@
         />
         <p class="text-xs text-gray-600 mt-1">
           Used to generate Instagram captions with GPT-4o.
-          Get your key at <a href="https://platform.openai.com/api-keys" target="_blank" class="text-pink-400 hover:underline">platform.openai.com</a>
+          Get your key at <a href="https://platform.openai.com/api-keys" target="_blank" class="text-accent-400 hover:underline">platform.openai.com</a>
         </p>
       </div>
     </div>
@@ -182,7 +206,7 @@
         <div class="bg-blue-500/5 border border-blue-500/20 rounded-lg p-3">
           <p class="text-xs text-gray-400">
             ngrok creates a secure tunnel so Instagram can download your media. It starts automatically when Managram opens.
-            Get a free authtoken at <a href="https://ngrok.com/signup" target="_blank" class="text-pink-400 hover:underline">ngrok.com/signup</a>.
+            Get a free authtoken at <a href="https://ngrok.com/signup" target="_blank" class="text-accent-400 hover:underline">ngrok.com/signup</a>.
           </p>
         </div>
       </div>
@@ -191,8 +215,8 @@
     <!-- App Credentials -->
     <div class="card">
       <div class="flex items-center gap-3 mb-4">
-        <div class="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center">
-          <KeyIcon class="w-4 h-4 text-purple-400" />
+        <div class="w-8 h-8 rounded-lg bg-white/[0.06] flex items-center justify-center">
+          <KeyIcon class="w-4 h-4 text-gray-300" />
         </div>
         <h2 class="text-base font-semibold text-white">Facebook App Credentials</h2>
       </div>
@@ -206,7 +230,7 @@
           <input v-model="appSecret" type="password" placeholder="Your App Secret" class="input-field" autocomplete="off" />
         </div>
         <p class="text-xs text-gray-600">
-          Create an app at <a href="https://developers.facebook.com" target="_blank" class="text-pink-400 hover:underline">developers.facebook.com</a>
+          Create an app at <a href="https://developers.facebook.com" target="_blank" class="text-accent-400 hover:underline">developers.facebook.com</a>
         </p>
       </div>
     </div>
@@ -232,7 +256,7 @@
     <div class="card bg-white/2 border-white/5">
       <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">About</h2>
       <div class="flex items-center gap-3">
-        <div class="w-10 h-10 rounded-xl bg-instagram-gradient flex items-center justify-center">
+        <div class="w-10 h-10 rounded-xl bg-accent-500 flex items-center justify-center">
           <span class="text-white font-bold">M</span>
         </div>
         <div>
@@ -256,15 +280,43 @@ import {
   GlobeAltIcon,
   KeyIcon,
   CheckIcon,
+  CreditCardIcon,
   ArrowRightOnRectangleIcon,
 } from '@heroicons/vue/24/outline';
 import { CheckCircleIcon } from '@heroicons/vue/24/solid';
 import { useAuthStore } from '../stores/auth.js';
 import { useSettingsStore } from '../stores/settings.js';
+import { useAccountStore } from '../stores/account.js';
 
 const showToast = inject('showToast');
 const authStore = useAuthStore();
 const settingsStore = useSettingsStore();
+const accountStore = useAccountStore();
+const billingLoading = ref(false);
+
+async function startCheckout() {
+  billingLoading.value = true;
+  try {
+    const response = await axios.post('/billing/checkout', {});
+    window.location.href = response.data.url;
+  } catch (err) {
+    showToast(err.response?.data?.error || 'Failed to start checkout', 'error');
+  } finally {
+    billingLoading.value = false;
+  }
+}
+
+async function openPortal() {
+  billingLoading.value = true;
+  try {
+    const response = await axios.get('/billing/portal');
+    window.location.href = response.data.url;
+  } catch (err) {
+    showToast(err.response?.data?.error || 'Failed to open billing portal', 'error');
+  } finally {
+    billingLoading.value = false;
+  }
+}
 
 const isElectron = typeof window !== 'undefined' && !!window.electronAPI?.isElectron;
 

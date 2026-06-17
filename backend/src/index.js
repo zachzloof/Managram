@@ -1,13 +1,15 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const session = require('express-session');
+const cookieParser = require('cookie-parser');
 const path = require('path');
 const fs = require('fs');
 
 const { getDb, getSetting } = require('./database');
 const { startScheduler } = require('./scheduler');
 const { isR2Mode } = require('./services/r2');
+const { isHostedMode } = require('./services/appMode');
+const localLicenseGate = require('./services/localLicenseGate');
 
 const authRoutes = require('./routes/auth');
 const mediaRoutes = require('./routes/media');
@@ -17,6 +19,11 @@ const scheduleRoutes = require('./routes/schedule');
 const captionsRoutes = require('./routes/captions');
 const settingsRoutes = require('./routes/settings');
 const presetsRoutes = require('./routes/presets');
+const tagsRoutes = require('./routes/tags');
+const analyticsRoutes = require('./routes/analytics');
+const accountRoutes = require('./routes/account');
+const { router: billingRoutes, webhookHandler } = require('./routes/billing');
+const adminRoutes = require('./routes/admin');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -31,23 +38,24 @@ app.use(
   })
 );
 
-// Session middleware
-app.use(
-  session({
-    secret: process.env.SESSION_SECRET || 'managram-dev-secret-change-in-production',
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-      secure: false, // set to true in production with HTTPS
-      httpOnly: true,
-      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
-    },
-  })
-);
+app.use(cookieParser());
+
+// Stripe webhook needs the RAW request body to verify its signature — it's
+// wired directly on `app` (not the billing router) with express.raw() ahead
+// of the global JSON body parser below, or signature verification would
+// always fail.
+app.post('/billing/webhook', express.raw({ type: 'application/json' }), webhookHandler);
 
 // Body parsing
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+// Local/Electron license gate — irrelevant in hosted mode, where
+// requireAccount on each route already handles access control.
+app.use((req, res, next) => {
+  if (isHostedMode() || req.path === '/health' || localLicenseGate.isValid()) return next();
+  res.status(402).json({ error: 'Subscription required — please sign in again.' });
+});
 
 // API Routes
 app.use('/auth', authRoutes);
@@ -58,6 +66,11 @@ app.use('/schedule', scheduleRoutes);
 app.use('/captions', captionsRoutes);
 app.use('/settings', settingsRoutes);
 app.use('/presets', presetsRoutes);
+app.use('/tags', tagsRoutes);
+app.use('/analytics', analyticsRoutes);
+app.use('/account', accountRoutes);
+app.use('/billing', billingRoutes);
+app.use('/admin', adminRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
@@ -101,9 +114,16 @@ async function startServer() {
   console.log('[DB] Database initialized');
   startScheduler(db);
 
+  if (isHostedMode()) {
+    const { initializeHostedSchema } = require('./db/postgres');
+    await initializeHostedSchema();
+    console.log('[DB] Hosted Postgres schema initialized (accounts, billing_events)');
+  }
+
   return new Promise((resolve) => {
     app.listen(PORT, () => {
       console.log(`[Server] Managram backend running on http://localhost:${PORT}`);
+      console.log(`[Server] App mode: ${isHostedMode() ? 'hosted (multi-tenant)' : 'local'}`);
       console.log(`[Server] Storage mode: ${isR2Mode() ? 'R2 (Cloudflare)' : 'Local filesystem'}`);
       if (!isR2Mode()) {
         console.log(`[Server] Content folder: ${getSetting('content_folder_path') || '(not configured)'}`);
