@@ -45,10 +45,34 @@ export default defineConfig({
         target: 'http://localhost:3001',
         changeOrigin: true,
       },
+      '/tags': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
+      '/analytics': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
+      '/account': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
+      '/billing': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
+      '/admin': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
       '/health': {
         target: 'http://localhost:3001',
         changeOrigin: true,
       },
     },
+  },
+  test: {
+    environment: 'jsdom',
+    globals: true,
   },
 });
