@@ -1,7 +1,7 @@
 <template>
   <div
-    class="relative rounded-xl overflow-hidden bg-gray-800 border transition-all duration-200 cursor-pointer aspect-square"
-    :class="selected ? 'border-pink-500' : isHovered ? 'border-white/20' : 'border-white/5'"
+    class="relative rounded-lg overflow-hidden bg-gray-800 border transition-all duration-200 cursor-pointer aspect-square"
+    :class="selected ? 'border-accent-500' : isHovered ? 'border-white/20' : 'border-white/5'"
     @click="$emit('select', file)"
     @mouseenter="isHovered = true"
     @mouseleave="isHovered = false"
@@ -67,7 +67,7 @@
       <div
         class="w-5 h-5 rounded border-2 flex items-center justify-center transition-all"
         :class="selected
-          ? 'bg-pink-500 border-pink-500'
+          ? 'bg-accent-500 border-accent-500'
           : 'bg-black/50 border-white/60 hover:border-white'"
       >
         <CheckIcon v-if="selected" class="w-3 h-3 text-white" />
@@ -116,6 +116,7 @@
         </button>
       </div>
       <p class="text-gray-400 text-xs">{{ file.sizeFormatted }}</p>
+      <TagPicker :subpath="file.subpath" :tags="file.tags || []" @click.stop />
       <div class="flex gap-1.5 mt-1 flex-wrap justify-center">
         <button
           @click.stop="$emit('preview', file)"
@@ -128,10 +129,17 @@
         <button
           v-if="showPostNow"
           @click.stop="$emit('postNow', file)"
-          class="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-instagram-gradient text-white text-xs font-medium hover:opacity-90 transition-opacity"
+          class="flex items-center gap-1 px-2.5 py-1.5 rounded-md bg-accent-500 text-white text-xs font-medium hover:bg-accent-400 transition-colors"
         >
           <BoltIcon class="w-3 h-3" />
           Post
+        </button>
+        <button
+          @click.stop="showHistory = true"
+          class="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white/10 border border-white/20 text-white text-xs font-medium hover:bg-white/20 transition-colors"
+        >
+          <ClockIcon class="w-3 h-3" />
+          History
         </button>
         <button
           @click.stop="$emit('sendTo', file)"
@@ -149,6 +157,8 @@
         </button>
       </div>
     </div>
+
+    <MediaHistoryModal v-if="showHistory" :file="file" @close="showHistory = false" />
   </div>
 </template>
 
@@ -166,14 +176,19 @@ import {
   FolderArrowDownIcon,
   StarIcon,
   MagnifyingGlassPlusIcon,
+  ClockIcon,
 } from '@heroicons/vue/24/outline';
 import { StarIcon as StarIconSolid } from '@heroicons/vue/24/solid';
+import TagPicker from './TagPicker.vue';
+import MediaHistoryModal from './MediaHistoryModal.vue';
 
 const props = defineProps({
   file: { type: Object, required: true },
   selected: { type: Boolean, default: false },
   showPostNow: { type: Boolean, default: true },
 });
+
+const showHistory = ref(false);
 
 const emit = defineEmits(['select', 'toggle', 'postNow', 'preview', 'renamed', 'delete', 'sendTo', 'rated']);
 
