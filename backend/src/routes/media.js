@@ -345,6 +345,11 @@ router.post('/trim', async (req, res) => {
           .run();
       });
 
+      const verified = await contentIdUtil.verifyVideoDuration(tmpOutput, endTime - startTime, 1.5);
+      if (!verified) {
+        return res.status(500).json({ error: 'Trim verification failed — output duration did not match the requested trim. Original left untouched.' });
+      }
+
       // Overwrite the same key
       const contentType = mime.lookup(tmpOutput) || 'video/mp4';
       await r2.uploadStream(filePath, fs.createReadStream(tmpOutput), contentType);
@@ -373,7 +378,10 @@ router.post('/trim', async (req, res) => {
   }
 
   const ext = path.extname(resolved);
-  const tmpOutput = path.join(os.tmpdir(), `managram_trim_${Date.now()}${ext}`);
+  // Sibling of the original (not the OS temp folder) so the final swap below
+  // is a same-volume atomic rename rather than a cross-device copy that
+  // could leave a half-written file in the original's place if interrupted.
+  const tmpOutput = path.join(path.dirname(resolved), `.managram_trim_${Date.now()}${ext}`);
 
   try {
     const existingId = await mediaIdentity.peekContentId(resolved);
@@ -392,6 +400,17 @@ router.post('/trim', async (req, res) => {
         .on('error', reject)
         .run();
     });
+
+    // Don't trust "ffmpeg exited cleanly" alone — confirm the trimmed output
+    // is actually close to the requested length before it's ever allowed to
+    // replace the original.
+    const expectedDuration = endTime - startTime;
+    const verified = await contentIdUtil.verifyVideoDuration(tmpOutput, expectedDuration, 1.5);
+    if (!verified) {
+      fs.unlink(tmpOutput, () => {});
+      return res.status(500).json({ error: 'Trim verification failed — output duration did not match the requested trim. Original left untouched.' });
+    }
+
     // Replace original with trimmed output
     await fs.move(tmpOutput, resolved, { overwrite: true });
     if (existingId) mediaIdentity.relinkIdentity(ACCOUNT_ID, existingId, resolved);

@@ -173,6 +173,17 @@ This means:
 - GIFs aren't stamped — there's no reliable lossless custom-metadata field for
   that format, and it's rarely the thing actually being posted/analyzed here.
 
+**Safety**: stamping a video re-multiplexes its container (no re-encoding,
+no pixel/frame changes) into a temp file *next to* the original, verifies
+the result's duration matches before allowing anything, then atomically
+renames it over the original — only ever on the same filesystem volume, so
+the swap can't be interrupted into a half-written state the way a
+cross-device copy could. The same verify-then-atomic-swap approach applies
+to in-app video trimming, which has always overwritten the original by
+design. If verification fails for any reason, the temp file is discarded
+and the original is left exactly as it was — you'll see an error rather than
+a silently corrupted file.
+
 The library listing itself stays fast regardless of folder size: it only
 *reads* a cached subpath→ID mapping from the database, never the files
 themselves. A file renamed outside the app will show up unlinked from its

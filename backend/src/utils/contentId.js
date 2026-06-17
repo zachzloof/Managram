@@ -1,6 +1,5 @@
 const fs = require('fs-extra');
 const path = require('path');
-const os = require('os');
 const crypto = require('crypto');
 const piexif = require('piexifjs');
 const extractChunks = require('png-chunks-extract');
@@ -108,24 +107,61 @@ function readVideoId(filePath) {
   });
 }
 
+function probeDuration(filePath) {
+  return new Promise((resolve) => {
+    ffmpeg.ffprobe(filePath, (err, data) => {
+      if (err) return resolve(null);
+      const duration = parseFloat(data?.format?.duration);
+      resolve(isFinite(duration) ? duration : null);
+    });
+  });
+}
+
+// Sanity check that ffmpeg actually produced something plausible before it's
+// ever allowed to replace a real file — "ffmpeg exited without an error" is
+// not the same guarantee as "the output is intact." Compares duration
+// against an expected value (the original's own duration for a lossless
+// remux, or a target duration for a trim) within a generous tolerance.
+// Returns true (skip the check) if the expected duration couldn't be
+// determined at all, rather than blocking the whole operation on that edge
+// case — the much more common failure mode this guards against is a remux
+// that silently truncated or corrupted the stream, not an unreadable input.
+async function verifyVideoDuration(candidatePath, expectedDurationSeconds, toleranceSeconds = 1) {
+  if (expectedDurationSeconds == null) return true;
+  const actual = await probeDuration(candidatePath);
+  if (actual == null) return false;
+  return Math.abs(actual - expectedDurationSeconds) <= toleranceSeconds;
+}
+
 // Lossless stream-copy remux that stamps the id as container metadata.
+// The temp file lives *next to* the original (not the OS temp folder) so
+// the final swap is a same-volume atomic rename, not a cross-device
+// copy-then-delete that could leave a half-written file in the original's
+// place if interrupted partway through.
 function writeVideoId(filePath, id) {
   return new Promise((resolve, reject) => {
     const ext = path.extname(filePath);
-    const tmpPath = path.join(os.tmpdir(), `managram_stamp_${Date.now()}${ext}`);
-    ffmpeg(filePath)
-      .outputOptions(['-c', 'copy', '-map_metadata', '0', ...metadataOutputOptions(id)])
-      .output(tmpPath)
-      .on('end', async () => {
-        try {
-          await fs.move(tmpPath, filePath, { overwrite: true });
-          resolve();
-        } catch (err) {
-          reject(err);
-        }
-      })
-      .on('error', reject)
-      .run();
+    const tmpPath = path.join(path.dirname(filePath), `.managram_stamp_${Date.now()}${ext}`);
+    probeDuration(filePath).then((originalDuration) => {
+      ffmpeg(filePath)
+        .outputOptions(['-c', 'copy', '-map_metadata', '0', ...metadataOutputOptions(id)])
+        .output(tmpPath)
+        .on('end', async () => {
+          try {
+            const ok = await verifyVideoDuration(tmpPath, originalDuration);
+            if (!ok) {
+              await fs.unlink(tmpPath).catch(() => {});
+              throw new Error('Stamped file failed verification (duration mismatch) — original left untouched');
+            }
+            await fs.move(tmpPath, filePath, { overwrite: true });
+            resolve();
+          } catch (err) {
+            reject(err);
+          }
+        })
+        .on('error', reject)
+        .run();
+    });
   });
 }
 
@@ -184,5 +220,7 @@ module.exports = {
   isStampable,
   isVideoExt,
   metadataOutputOptions,
+  probeDuration,
+  verifyVideoDuration,
   TAG_KEY,
 };

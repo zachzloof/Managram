@@ -95,6 +95,45 @@ describe('MP4 round trip', () => {
     expect(id).toMatch(/^[0-9a-f-]{36}$/);
     expect(await contentId.readContentId(file, '.mp4')).toBe(id);
   }, 15000);
+
+  it('leaves no stray .managram_stamp_* temp file behind next to the original', async () => {
+    // workDir is shared across this whole test file, so check for the
+    // specific temp-file pattern rather than asserting the directory's
+    // entire contents (which would also include other tests' fixtures).
+    const file = copyFixture(mp4Path, '.mp4');
+    await contentId.ensureContentId(file, '.mp4');
+    const stray = fs.readdirSync(path.dirname(file)).filter((f) => f.startsWith('.managram_stamp_'));
+    expect(stray).toEqual([]);
+  }, 15000);
+
+  it('does not change the video duration when stamping (lossless remux)', async () => {
+    const file = copyFixture(mp4Path, '.mp4');
+    const before = await contentId.probeDuration(file);
+    await contentId.ensureContentId(file, '.mp4');
+    const after = await contentId.probeDuration(file);
+    expect(after).toBeCloseTo(before, 0);
+  }, 15000);
+});
+
+describe('verifyVideoDuration', () => {
+  it('passes when the candidate duration is within tolerance of expected', async () => {
+    const ok = await contentId.verifyVideoDuration(mp4Path, await contentId.probeDuration(mp4Path), 1);
+    expect(ok).toBe(true);
+  });
+
+  it('fails when the candidate duration is way off from expected', async () => {
+    const ok = await contentId.verifyVideoDuration(mp4Path, 9999, 1);
+    expect(ok).toBe(false);
+  });
+
+  it('skips the check (returns true) when no expected duration is given', async () => {
+    expect(await contentId.verifyVideoDuration(mp4Path, null)).toBe(true);
+  });
+
+  it('fails when the candidate file cannot be probed at all', async () => {
+    const ok = await contentId.verifyVideoDuration(path.join(workDir, 'does-not-exist.mp4'), 5, 1);
+    expect(ok).toBe(false);
+  });
 });
 
 describe('unsupported formats', () => {
