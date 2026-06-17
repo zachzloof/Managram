@@ -3,9 +3,13 @@ const path = require('path');
 const fs = require('fs');
 const { getSetting } = require('../database');
 const instagramService = require('../services/instagram');
+const mediaIdentity = require('../services/mediaIdentity');
 const { buildMediaUrl } = require('../utils/mediaUrl');
 
 const router = express.Router();
+
+// TODO(Part 5): replace with req.accountId from auth middleware once accounts land.
+const ACCOUNT_ID = 'local';
 
 // Size limits in bytes
 const LIMITS = {
@@ -118,6 +122,19 @@ router.post('/publish', async (req, res) => {
 
     const postId = await instagramService.publishMedia(userId, accessToken, containerId);
     console.log(`[Posts] Successfully published post ID: ${postId}`);
+
+    try {
+      await mediaIdentity.recordPublishedPost({
+        mediaPathOrKey: mediaPath,
+        instagramPostId: postId,
+        mediaType,
+        caption: caption || '',
+        accountId: ACCOUNT_ID,
+      });
+    } catch (err) {
+      console.warn('[Posts] Failed to record post history:', err.message);
+    }
+
     res.json({ success: true, postId, message: 'Post published successfully' });
   } catch (err) {
     const igError = err.response?.data?.error;

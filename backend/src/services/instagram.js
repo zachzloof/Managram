@@ -81,6 +81,16 @@ async function getRecentMedia(userId, accessToken, limit = 12) {
   return response.data.data || [];
 }
 
+async function getMediaFields(mediaId, accessToken) {
+  const response = await axios.get(`${GRAPH_BASE}/${mediaId}`, {
+    params: {
+      fields: 'like_count,comments_count',
+      access_token: accessToken,
+    },
+  });
+  return response.data;
+}
+
 async function getInsights(userId, accessToken) {
   try {
     const response = await axios.get(`${GRAPH_BASE}/${userId}/insights`, {
@@ -102,5 +112,6 @@ module.exports = {
   waitForContainerReady,
   getAccountInfo,
   getRecentMedia,
+  getMediaFields,
   getInsights,
 };

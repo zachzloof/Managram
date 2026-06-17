@@ -4,10 +4,15 @@ const fs = require('fs-extra');
 const mime = require('mime-types');
 const multer = require('multer');
 const os = require('os');
-const { getSetting, setSetting, getRatingsForSubpaths, setRating } = require('../database');
+const { getSetting, setSetting, getRatingsForSubpaths, getRatingsForContentIds, setRating, getTagsForContentIds } = require('../database');
 const r2 = require('../services/r2');
+const mediaIdentity = require('../services/mediaIdentity');
+const contentIdUtil = require('../utils/contentId');
 
 const router = express.Router();
+
+// TODO(Part 5): replace with req.accountId from auth middleware once accounts land.
+const ACCOUNT_ID = 'local';
 
 const SUPPORTED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.mp4', '.mov'];
 const VIDEO_EXTENSIONS = ['.mp4', '.mov'];
@@ -89,9 +94,28 @@ function buildR2FileEntry(obj) {
   };
 }
 
+// Attaches rating + tags + content_id to each file entry. Only reads the
+// subpath -> content_id cache (a DB lookup) — never reads or stamps file
+// metadata here, so plain library listing stays fast even for large folders.
 function attachRatings(files) {
-  const ratings = getRatingsForSubpaths(files.map((f) => f.subpath));
-  return files.map((f) => ({ ...f, rating: ratings[f.subpath] || 0 }));
+  const legacyRatings = getRatingsForSubpaths(files.map((f) => f.subpath));
+  const identities = mediaIdentity.batchResolveCachedIdentities(ACCOUNT_ID, files.map((f) => f.subpath));
+  const contentIds = files
+    .map((f) => identities[f.subpath]?.content_id)
+    .filter(Boolean);
+  const ratingsById = getRatingsForContentIds(contentIds);
+  const tagsById = getTagsForContentIds(ACCOUNT_ID, contentIds);
+
+  return files.map((f) => {
+    const contentId = identities[f.subpath]?.content_id || null;
+    const rating = contentId && ratingsById[contentId] != null ? ratingsById[contentId] : (legacyRatings[f.subpath] || 0);
+    return {
+      ...f,
+      contentId,
+      rating,
+      tags: contentId ? (tagsById[contentId] || []) : [],
+    };
+  });
 }
 
 // ── Multer (disk storage → R2 or local) ────────────────────────────────────
@@ -304,6 +328,9 @@ router.post('/trim', async (req, res) => {
     try {
       tmpInput = await r2.downloadToTemp(filePath);
       tmpOutput = path.join(os.tmpdir(), `managram_trim_${Date.now()}${ext}`);
+      const existingId = await mediaIdentity.peekContentId(tmpInput);
+      const outputOptions = ['-preset veryfast', '-crf 23', '-movflags +faststart'];
+      if (existingId) outputOptions.push(...contentIdUtil.metadataOutputOptions(existingId));
 
       await new Promise((resolve, reject) => {
         ffmpeg(tmpInput)
@@ -311,7 +338,7 @@ router.post('/trim', async (req, res) => {
           .setDuration(endTime - startTime)
           .videoCodec('libx264')
           .audioCodec('aac')
-          .outputOptions(['-preset veryfast', '-crf 23', '-movflags +faststart'])
+          .outputOptions(outputOptions)
           .output(tmpOutput)
           .on('end', resolve)
           .on('error', reject)
@@ -321,6 +348,7 @@ router.post('/trim', async (req, res) => {
       // Overwrite the same key
       const contentType = mime.lookup(tmpOutput) || 'video/mp4';
       await r2.uploadStream(filePath, fs.createReadStream(tmpOutput), contentType);
+      if (existingId) mediaIdentity.relinkIdentity(ACCOUNT_ID, existingId, filePath);
       res.json({ success: true, filePath, fileName: path.basename(filePath) });
     } catch (err) {
       console.error('[Media] R2 trim error:', err.message);
@@ -348,13 +376,17 @@ router.post('/trim', async (req, res) => {
   const tmpOutput = path.join(os.tmpdir(), `managram_trim_${Date.now()}${ext}`);
 
   try {
+    const existingId = await mediaIdentity.peekContentId(resolved);
+    const outputOptions = ['-preset veryfast', '-crf 23', '-movflags +faststart'];
+    if (existingId) outputOptions.push(...contentIdUtil.metadataOutputOptions(existingId));
+
     await new Promise((resolve, reject) => {
       ffmpeg(resolved)
         .setStartTime(startTime)
         .setDuration(endTime - startTime)
         .videoCodec('libx264')
         .audioCodec('aac')
-        .outputOptions(['-preset veryfast', '-crf 23', '-movflags +faststart'])
+        .outputOptions(outputOptions)
         .output(tmpOutput)
         .on('end', resolve)
         .on('error', reject)
@@ -362,6 +394,7 @@ router.post('/trim', async (req, res) => {
     });
     // Replace original with trimmed output
     await fs.move(tmpOutput, resolved, { overwrite: true });
+    if (existingId) mediaIdentity.relinkIdentity(ACCOUNT_ID, existingId, resolved);
     res.json({ success: true, filePath: resolved, fileName: path.basename(resolved) });
   } catch (err) {
     fs.unlink(tmpOutput, () => {});
@@ -393,11 +426,14 @@ router.post('/crop', async (req, res) => {
     try {
       tmpInput = await r2.downloadToTemp(filePath);
       tmpOutput = path.join(os.tmpdir(), `managram_crop_${Date.now()}${ext}`);
+      const existingId = await mediaIdentity.peekContentId(tmpInput);
+      const outputOptions = ['-c:a copy'];
+      if (existingId) outputOptions.push(...contentIdUtil.metadataOutputOptions(existingId));
 
       await new Promise((resolve, reject) => {
         ffmpeg(tmpInput)
           .videoFilters(cropFilter)
-          .outputOptions('-c:a copy')
+          .outputOptions(outputOptions)
           .output(tmpOutput)
           .on('end', resolve)
           .on('error', reject)
@@ -406,6 +442,7 @@ router.post('/crop', async (req, res) => {
 
       const contentType = mime.lookup(tmpOutput) || 'video/mp4';
       await r2.uploadStream(outputKey, fs.createReadStream(tmpOutput), contentType);
+      if (existingId) mediaIdentity.relinkIdentity(ACCOUNT_ID, existingId, outputKey);
       res.json({ success: true, filePath: outputKey, fileName: path.basename(outputKey) });
     } catch (err) {
       console.error('[Media] R2 crop error:', err.message);
@@ -437,15 +474,20 @@ router.post('/crop', async (req, res) => {
   }
 
   try {
+    const existingId = await mediaIdentity.peekContentId(resolved);
+    const outputOptions = ['-c:a copy'];
+    if (existingId) outputOptions.push(...contentIdUtil.metadataOutputOptions(existingId));
+
     await new Promise((resolve, reject) => {
       ffmpeg(resolved)
         .videoFilters(cropFilter)
-        .outputOptions('-c:a copy')
+        .outputOptions(outputOptions)
         .output(outputPath)
         .on('end', resolve)
         .on('error', reject)
         .run();
     });
+    if (existingId) mediaIdentity.relinkIdentity(ACCOUNT_ID, existingId, outputPath);
     res.json({ success: true, filePath: outputPath, fileName: path.basename(outputPath) });
   } catch (err) {
     console.error('[Media] Crop error:', err.message);
@@ -516,6 +558,7 @@ router.patch('/rename', async (req, res) => {
     const newKey = `${dir}${newName}`;
     try {
       await r2.renameObject(filePath, newKey);
+      mediaIdentity.relinkBySubpathIfCached(ACCOUNT_ID, filePath, newKey);
       return res.json({ success: true, newPath: newKey, fileName: newName });
     } catch (err) {
       console.error('[Media] R2 rename error:', err.message);
@@ -540,6 +583,7 @@ router.patch('/rename', async (req, res) => {
 
   try {
     await fs.rename(resolved, newPath);
+    mediaIdentity.relinkBySubpathIfCached(ACCOUNT_ID, resolved, newPath);
     res.json({ success: true, newPath, fileName: newName });
   } catch (err) {
     console.error('[Media] Rename error:', err.message);
@@ -616,13 +660,43 @@ router.post('/folder', async (req, res) => {
 });
 
 // POST /media/rating — set star rating (0 = clear)
-router.post('/rating', (req, res) => {
+router.post('/rating', async (req, res) => {
   const { subpath, rating } = req.body;
   if (!subpath) return res.status(400).json({ error: 'subpath required' });
   const r = parseInt(rating);
   if (isNaN(r) || r < 0 || r > 5) return res.status(400).json({ error: 'rating must be 0–5' });
-  setRating(subpath, r);
-  res.json({ success: true, subpath, rating: r });
+
+  const rootFolder = getSetting('content_folder_path');
+  const mediaPathOrKey = r2.isR2Mode() ? subpath : path.resolve(rootFolder || '', subpath);
+  const contentId = await mediaIdentity.resolveContentId(mediaPathOrKey, ACCOUNT_ID);
+
+  setRating(subpath, r, contentId);
+  res.json({ success: true, subpath, rating: r, contentId });
+});
+
+// GET /media/identity — full detail for one file: content id, tags, post history
+router.get('/identity', async (req, res) => {
+  const subpath = req.query.subpath;
+  if (!subpath) return res.status(400).json({ error: 'subpath required' });
+
+  const rootFolder = getSetting('content_folder_path');
+  const mediaPathOrKey = r2.isR2Mode() ? subpath : path.resolve(rootFolder || '', subpath);
+
+  try {
+    const contentId = await mediaIdentity.resolveContentId(mediaPathOrKey, ACCOUNT_ID);
+    if (!contentId) return res.json({ contentId: null, tags: [], history: [] });
+
+    const { getTagsForContentIds, getPostHistoryForContentIds, getLatestMetrics } = require('../database');
+    const tags = getTagsForContentIds(ACCOUNT_ID, [contentId])[contentId] || [];
+    const history = getPostHistoryForContentIds(ACCOUNT_ID, [contentId]);
+    const metrics = getLatestMetrics(history.map((h) => h.id));
+    const historyWithMetrics = history.map((h) => ({ ...h, metrics: metrics[h.id] || null }));
+
+    res.json({ contentId, tags, history: historyWithMetrics });
+  } catch (err) {
+    console.error('[Media] identity lookup error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 module.exports = router;

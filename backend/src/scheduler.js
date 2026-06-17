@@ -2,10 +2,14 @@ const cron = require('node-cron');
 const path = require('path');
 const fs = require('fs-extra');
 const { v4: uuidv4 } = require('uuid');
-const { getSetting, setSetting } = require('./database');
+const { getSetting, setSetting, getAllPostHistory, getLatestMetrics, insertPostMetrics, insertAccountSnapshot } = require('./database');
 const instagramService = require('./services/instagram');
 const openaiService = require('./services/openai');
+const mediaIdentity = require('./services/mediaIdentity');
 const { buildMediaUrl } = require('./utils/mediaUrl');
+
+// TODO(Part 5): replace with the real per-tenant account id once accounts land.
+const ACCOUNT_ID = 'local';
 
 const SUPPORTED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.mp4', '.mov'];
 
@@ -57,7 +61,57 @@ async function postMedia(db, mediaPath, caption) {
   }
 
   const postId = await instagramService.publishMedia(userId, accessToken, containerId);
+
+  try {
+    await mediaIdentity.recordPublishedPost({
+      mediaPathOrKey: mediaPath,
+      instagramPostId: postId,
+      mediaType,
+      caption,
+      accountId: ACCOUNT_ID,
+    });
+  } catch (err) {
+    console.warn('[Scheduler] Failed to record post history:', err.message);
+  }
+
   return postId;
+}
+
+// Polls Instagram for fresh engagement numbers on recently-published posts,
+// and snapshots the account's follower count so growth can be charted over
+// time (the Instagram API only ever returns the *current* count).
+async function pollMetrics(db) {
+  const accessToken = getSetting('instagram_access_token');
+  const userId = getSetting('instagram_user_id');
+  if (!accessToken || !userId) return;
+
+  try {
+    const accountInfo = await instagramService.getAccountInfo(accessToken);
+    insertAccountSnapshot(ACCOUNT_ID, accountInfo.followers_count, accountInfo.media_count);
+  } catch (err) {
+    console.warn('[Scheduler] Account snapshot failed:', err.message);
+  }
+
+  const recent = getAllPostHistory(ACCOUNT_ID, 100).filter((h) => h.instagram_post_id);
+  if (recent.length === 0) return;
+
+  for (const post of recent) {
+    const postedAt = new Date(post.posted_at.replace(' ', 'T') + 'Z');
+    const ageMs = Date.now() - postedAt.getTime();
+    if (ageMs > 14 * 24 * 60 * 60 * 1000) continue; // stop polling after 2 weeks
+
+    try {
+      const fields = await instagramService.getMediaFields(post.instagram_post_id, accessToken);
+      insertPostMetrics({
+        accountId: ACCOUNT_ID,
+        postHistoryId: post.id,
+        likeCount: fields.like_count,
+        commentsCount: fields.comments_count,
+      });
+    } catch (err) {
+      console.warn(`[Scheduler] Metrics fetch failed for post ${post.id}:`, err.message);
+    }
+  }
 }
 
 function getCurrentDayAbbr() {
@@ -238,6 +292,15 @@ function startScheduler(db) {
       await checkAndFireSchedules(db);
     } catch (err) {
       console.error('[Scheduler] Unexpected error:', err.message);
+    }
+  });
+
+  // Engagement metrics + follower snapshots — hourly is plenty for trend charts
+  cron.schedule('0 * * * *', async () => {
+    try {
+      await pollMetrics(db);
+    } catch (err) {
+      console.error('[Scheduler] Metrics poll error:', err.message);
     }
   });
 }
